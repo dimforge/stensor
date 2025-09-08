@@ -7,5 +7,4 @@ dist
 dist2d
 dist3d
 assets/**/*.bin
-src/autogen2d
-src/autogen3d
+src/autogen
