@@ -1,0 +1,44 @@
+[package]
+name = "gla"
+authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
+description = "Composable WGSL shaders for linear algebra."
+homepage = "https://wgmath.rs"
+repository = "https://github.com/dimforge/wgmath"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[features]
+cuda = [ "cudarc", "slang-hal/cuda" ]
+cublas = [ "slang-hal/cublas" ]
+
+[dependencies]
+wgpu = "26"
+encase = "0.11"
+bytemuck = "1"
+nalgebra = "0.34"
+
+cudarc = {  version = "0.16", optional = true }
+
+minislang = "0.1"
+slang-hal = { version = "0.1", features = ["derive"] }
+include_dir = "0.7"
+
+[dev-dependencies]
+nalgebra = { version = "0.34", features = ["rand"] }
+futures-test = "0.3"
+serial_test = "3"
+approx = "0.5"
+async-std = { version = "1", features = ["attributes"] }
+plotly = "0.12.1"
+indexmap = "2"
+anyhow = "1"
+
+[build-dependencies]
+minislang = "0.1"
+
+[patch.crates-io]
+shader-slang = { path = "../slang-rs" }
+minislang = { path = "../slmath/crates/minislang" }
+slang-hal-derive = { path = "../slmath/crates/slang-hal-derive" }
+slang-hal = { path = "../slmath/crates/slang-hal" }
