@@ -1,5 +1,5 @@
 [package]
-name = "gla"
+name = "stensor"
 authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
 description = "Composable WGSL shaders for linear algebra."
 homepage = "https://wgmath.rs"
@@ -39,6 +39,6 @@ minislang = "0.1"
 
 [patch.crates-io]
 shader-slang = { path = "../slang-rs" }
-minislang = { path = "../slmath/crates/minislang" }
-slang-hal-derive = { path = "../slmath/crates/slang-hal-derive" }
-slang-hal = { path = "../slmath/crates/slang-hal" }
+minislang = { path = "../slang-hal/crates/minislang" }
+slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
+slang-hal = { path = "../slang-hal/crates/slang-hal" }

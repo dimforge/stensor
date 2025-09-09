@@ -1,6 +1,6 @@
 module sim3;
 
-import gla.geometry.quat;
+import stensor.geometry.quat;
 
 /// An 3D similarity representing a uniform scale, followed by a rotation, followed by a translation.
 public struct Sim3 {

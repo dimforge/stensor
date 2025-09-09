@@ -1,5 +1,5 @@
 import shape;
-import gla.utils.limits;
+import stensor.utils.limits;
 
 static const int WORKGROUP_SIZE = 256;
 // TODO: slang doesn’t have a way to get the total number of workgroups?

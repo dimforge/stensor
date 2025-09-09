@@ -3,19 +3,19 @@ use slang_hal::{test_shader_compilation, Shader};
 fn substitute2(src: &str) -> String {
     src.replace("DIM", "2")
         .replace("MAT", "mat2x2<f32>")
-        .replace("IMPORT_PATH", "gla::cholesky2")
+        .replace("IMPORT_PATH", "stensor::cholesky2")
 }
 
 fn substitute3(src: &str) -> String {
     src.replace("DIM", "3")
         .replace("MAT", "mat3x3<f32>")
-        .replace("IMPORT_PATH", "gla::cholesky3")
+        .replace("IMPORT_PATH", "stensor::cholesky3")
 }
 
 fn substitute4(src: &str) -> String {
     src.replace("DIM", "4")
         .replace("MAT", "mat4x4<f32>")
-        .replace("IMPORT_PATH", "gla::cholesky4")
+        .replace("IMPORT_PATH", "stensor::cholesky4")
 }
 
 #[derive(Shader)]

@@ -7,7 +7,7 @@ use slang_hal::backend::WebGpu;
 use slang_hal::backend::{Backend, Encoder};
 use slang_hal::shapes::ViewShapeBuffers;
 use slang_hal::tensor::{GpuTensor, TensorBuilder};
-use gla::linalg::{Gemm, GemmVariant};
+use stensor::linalg::{Gemm, GemmVariant};
 use wgpu::{BufferUsages, Features, Limits};
 
 #[async_std::main]
@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "cuda")]
     let mut cuda = slang_hal::cuda::Cuda::new()?;
     let mut entries = vec![];
-    let compiler = SlangCompiler::new(vec!["crates/gla/shaders".into()]);
+    let compiler = SlangCompiler::new(vec!["crates/stensor/shaders".into()]);
 
     let variants = ["Gemm", "GemmTr", "GemmFast", "GemmTrFast"];
 

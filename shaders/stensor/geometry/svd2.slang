@@ -1,6 +1,6 @@
 module svd2;
 
-import gla.utils.trig;
+import stensor.utils.trig;
 
 // The SVD of a 2x2 matrix.
 public struct Svd2 {

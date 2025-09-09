@@ -22,7 +22,7 @@ pub enum OpAssignVariant {
 
 /// Slang modules for various in-place binary operations.
 #[derive(Shader)]
-#[shader(module = "gla::linalg::op_assign")]
+#[shader(module = "stensor::linalg::op_assign")]
 pub struct OpAssign<B: Backend> {
     /// Kernel for computing in-place the sum of two tensors.
     pub add: GpuFunction<B>,
@@ -187,7 +187,7 @@ mod test {
             OpAssignVariant::Div,
             OpAssignVariant::Copy,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/gla/shaders".into()]);
+        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
 
         let op_assign = super::OpAssign::from_backend(&backend, &compiler).unwrap();
 

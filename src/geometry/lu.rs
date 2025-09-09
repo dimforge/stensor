@@ -7,7 +7,7 @@ fn substitute2(src: &str) -> String {
         .replace("NCOLS", "2u")
         .replace("PERM", "vec2<u32>")
         .replace("MAT", "mat2x2<f32>")
-        .replace("IMPORT_PATH", "gla::lu2")
+        .replace("IMPORT_PATH", "stensor::lu2")
 }
 
 fn substitute3(src: &str) -> String {
@@ -15,7 +15,7 @@ fn substitute3(src: &str) -> String {
         .replace("NCOLS", "3u")
         .replace("PERM", "vec3<u32>")
         .replace("MAT", "mat3x3<f32>")
-        .replace("IMPORT_PATH", "gla::lu3")
+        .replace("IMPORT_PATH", "stensor::lu3")
 }
 
 fn substitute4(src: &str) -> String {
@@ -23,7 +23,7 @@ fn substitute4(src: &str) -> String {
         .replace("NCOLS", "4u")
         .replace("PERM", "vec4<u32>")
         .replace("MAT", "mat4x4<f32>")
-        .replace("IMPORT_PATH", "gla::lu4")
+        .replace("IMPORT_PATH", "stensor::lu4")
 }
 
 macro_rules! gpu_output_types(

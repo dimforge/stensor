@@ -5,7 +5,7 @@ use crate::tensor::GpuTensorView;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Shader)]
-#[shader(module = "gla::linalg::gemm")]
+#[shader(module = "stensor::linalg::gemm")]
 /// Shader for computing the product of two matrices.
 pub struct Gemm<B: Backend> {
     /// The compute pipeline for `matrix1 * matrix2`.
@@ -237,7 +237,7 @@ mod test {
     }
 
     async fn gpu_gemm_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/gla/shaders".into()]);
+        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
         let gemm = super::Gemm::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);

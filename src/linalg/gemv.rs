@@ -30,7 +30,7 @@ pub const N: MatrixMode = MatrixMode::Normal;
 pub const T: MatrixMode = MatrixMode::Transposed;
 
 #[derive(Shader)]
-#[shader(module = "gla::linalg::gemv")]
+#[shader(module = "stensor::linalg::gemv")]
 /// Shader for computing the product of a matrix and a vector.
 pub struct Gemv<B: Backend> {
     /// The compute pipeline for `matrix * vector`.
@@ -349,7 +349,7 @@ mod test {
     }
 
     async fn gpu_gemv_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/gla/shaders".into()]);
+        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
         let gemv = super::Gemv::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);

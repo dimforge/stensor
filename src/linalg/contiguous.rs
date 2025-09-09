@@ -5,7 +5,7 @@ use crate::tensor::GpuTensorView;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Shader)]
-#[shader(module = "gla::linalg::contiguous")]
+#[shader(module = "stensor::linalg::contiguous")]
 /// Slang module for conversion from a non-contiguous tensor into a contiguous tensor.
 pub struct Contiguous<B: Backend> {
     /// Shader for copying a non-contiguous tensor into a row-major contiguous tensor.
@@ -85,7 +85,7 @@ mod test {
     }
 
     async fn gpu_contiguous_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/gla/shaders".into()]);
+        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
         let contiguous = super::Contiguous::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);

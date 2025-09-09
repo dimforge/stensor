@@ -7,7 +7,7 @@ use slang_hal::{Shader, ShaderArgs};
 /// Slang module for replicating the content of a source tensor as many times as possible to fill
 /// a destination tensor.
 #[derive(Shader)]
-#[shader(module = "gla::linalg::repeat")]
+#[shader(module = "stensor::linalg::repeat")]
 pub struct Repeat<B: Backend> {
     /// Kernel for replicating the content of a source tensor as many times as possible to fill
     /// a destination tensor.

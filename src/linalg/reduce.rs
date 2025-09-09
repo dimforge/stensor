@@ -36,7 +36,7 @@ impl ReduceVariant {
 
 /// A GPU kernel for performing the operation described by [`ReduceVariant`].
 #[derive(Shader)]
-#[shader(module = "gla::linalg::reduce")]
+#[shader(module = "stensor::linalg::reduce")]
 pub struct Reduce<B: Backend> {
     /// Kernel for computing the sum of every element of a tensor.
     pub reduce_sum: GpuFunction<B>,
@@ -93,7 +93,7 @@ mod test {
             ReduceVariant::Prod,
             ReduceVariant::SqNorm,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/gla/shaders".into()]);
+        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
 
         let reduce = super::Reduce::from_backend(&backend, &compiler).unwrap();
 

@@ -1,6 +1,6 @@
 module sim2;
 
-import gla.geometry.rot2;
+import stensor.geometry.rot2;
 
 /// An 2D similarity representing a uniform scale, followed by a rotation, followed by a translation.
 public struct Sim2 {

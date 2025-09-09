@@ -1,7 +1,7 @@
 //! Utilities for initializing and slicing tensors, matrices, vectors, and scalars gpu storage
 //! buffers.
 
-// TODO: feels like this should be in gla instead of slang-hal
+// TODO: feels like this should be in stensor instead of slang-hal
 
 use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
 use crate::shapes::{GGML_IDS, MatrixOrdering, ViewShape};
@@ -441,7 +441,7 @@ impl<'a, T: DeviceValue, B: Backend> From<&'a mut GpuTensor<T, B>> for GpuTensor
     }
 }
 
-/// A view over a mutable gla.
+/// A view over a mutable stensor.
 ///
 /// This is a view over an entier tensor, or only part of it, with a shape that doesn’t necessarily
 /// match the original tensor’s shape.

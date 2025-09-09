@@ -5,7 +5,7 @@
 
 module svd3;
 
-import gla.geometry.quat;
+import stensor.geometry.quat;
 
 
 // The SVD of a 3x3 matrix.
