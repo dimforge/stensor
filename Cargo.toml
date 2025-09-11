@@ -38,7 +38,12 @@ anyhow = "1"
 minislang = "0.1"
 
 [patch.crates-io]
-shader-slang = { path = "../slang-rs" }
-minislang = { path = "../slang-hal/crates/minislang" }
-slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
-slang-hal = { path = "../slang-hal/crates/slang-hal" }
+shader-slang = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
+minislang = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
+slang-hal-derive = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
+slang-hal = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
+
+#shader-slang = { path = "../slang-rs" }
+#minislang = { path = "../slang-hal/crates/minislang" }
+#slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
+#slang-hal = { path = "../slang-hal/crates/slang-hal" }
