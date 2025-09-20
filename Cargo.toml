@@ -3,7 +3,7 @@ name = "stensor"
 authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
 description = "Cross-platform GPU tensor library with Slang and Rust."
 repository = "https://github.com/dimforge/stensor"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 
