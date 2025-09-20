@@ -1,12 +1,11 @@
 [package]
 name = "stensor"
 authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
-description = "Composable WGSL shaders for linear algebra."
-homepage = "https://wgmath.rs"
-repository = "https://github.com/dimforge/wgmath"
+description = "Cross-platform GPU tensor library with Slang and Rust."
+repository = "https://github.com/dimforge/stensor"
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 [features]
 cuda = [ "cudarc", "slang-hal/cuda" ]
@@ -38,11 +37,6 @@ anyhow = "1"
 minislang = "0.1"
 
 [patch.crates-io]
-shader-slang = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
-minislang = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
-slang-hal-derive = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
-slang-hal = { git = "https://github.com/dimforge/slang-hal", rev = "77711e8ffd0bc3ed7a0106ce59c8a4b15b81a464" }
-
 #shader-slang = { path = "../slang-rs" }
 #minislang = { path = "../slang-hal/crates/minislang" }
 #slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
