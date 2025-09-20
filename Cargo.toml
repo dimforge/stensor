@@ -13,9 +13,9 @@ cublas = [ "slang-hal/cublas" ]
 
 [dependencies]
 wgpu = "26"
-encase = "0.11"
+encase = "0.12"
 bytemuck = "1"
-nalgebra = "0.34"
+nalgebra = { version = "0.34", features = ["encase"] }
 
 cudarc = {  version = "0.16", optional = true }
 
