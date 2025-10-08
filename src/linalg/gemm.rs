@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Shader)]
@@ -197,13 +197,13 @@ impl<B: Backend> Gemm<B> {
 #[cfg(test)]
 mod test {
     use crate::GemmVariant;
+    use crate::shapes::ViewShapeBuffers;
+    use crate::tensor::GpuTensor;
     use approx::relative_eq;
     use minislang::SlangCompiler;
     use nalgebra::DMatrix;
     use slang_hal::Shader;
     use slang_hal::backend::{Backend, Encoder, WebGpu};
-    use crate::shapes::ViewShapeBuffers;
-    use crate::tensor::GpuTensor;
     use wgpu::{BufferUsages, Features, Limits};
 
     #[futures_test::test]

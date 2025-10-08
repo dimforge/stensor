@@ -10,8 +10,8 @@ use minislang::SlangCompiler;
 
 pub mod geometry;
 pub mod linalg;
-pub mod tensor;
 pub mod shapes;
+pub mod tensor;
 
 // pub mod utils;
 

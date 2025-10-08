@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 /// Slang module for replicating the content of a source tensor as many times as possible to fill

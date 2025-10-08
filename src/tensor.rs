@@ -3,19 +3,20 @@
 
 // TODO: feels like this should be in stensor instead of slang-hal
 
-use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
 use crate::shapes::{GGML_IDS, MatrixOrdering, ViewShape};
 use bytemuck::Pod;
 use encase::ShaderType;
 use nalgebra::{Dim, IsContiguous, Matrix, Storage};
+use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
+use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use slang_hal::backend::WebGpu;
 use wgpu::BufferUsages;
 
-use slang_hal::ShaderArgs;
 #[cfg(feature = "cuda")]
 use crate::cuda::Cuda;
+use slang_hal::ShaderArgs;
 use slang_hal::shader::ShaderArgsError;
 
 /// Helper struct for creating gpu storage buffers (scalars, vectors, matrices, tensors).
@@ -69,16 +70,12 @@ impl TensorBuilder {
         self
     }
 
-    /// Builds the gpu tensor.
-    ///
-    /// # Safety
-    ///
-    /// The returned buffer must be initialized before being read from.
-    pub unsafe fn build_uninit<T: DeviceValue + Pod, B: Backend>(
+    /// Builds the uninitialized gpu tensor.
+    pub fn build_uninit<T: DeviceValue + Pod, B: Backend>(
         self,
         backend: &B,
     ) -> Result<GpuTensor<T, B>, B::Error> {
-        let buffer = unsafe { backend.uninit_buffer(self.len() as usize, self.usage)? };
+        let buffer = backend.uninit_buffer(self.len() as usize, self.usage)?;
         Ok(GpuTensor {
             shape: self.shape,
             buffer,
@@ -91,11 +88,11 @@ impl TensorBuilder {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn build_uninit_encased<T: DeviceValue + EncaseType, B: Backend>(
+    pub fn build_uninit_encased<T: DeviceValue + EncaseType, B: Backend>(
         self,
         backend: &B,
     ) -> Result<GpuTensor<T, B>, B::Error> {
-        let buffer = unsafe { backend.uninit_buffer_encased(self.len() as usize, self.usage)? };
+        let buffer = backend.uninit_buffer_encased(self.len() as usize, self.usage)?;
         Ok(GpuTensor {
             shape: self.shape,
             buffer,
@@ -213,6 +210,25 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// The number of elements in this tensor.
     pub fn len(&self) -> u64 {
         self.shape.into_iter().map(|s| s as u64).product()
+    }
+
+    /// The maximum number of elements this tensor can hold without needing a resize of the
+    /// underlying GPU buffer.
+    pub fn capacity(&self) -> u64
+    where T: Pod {
+        self.buffer.len() as u64
+    }
+
+    /// The maximum number of elements this tensor can hold without needing a resize of the
+    /// underlying GPU buffer.
+    pub fn capacity_encased(&self) -> u64
+    where T: EncaseType {
+        self.buffer.len_encased() as u64
+    }
+
+    /// The tensor’s order (i.e. the number of dimensions with a size > 1).
+    pub fn order(&self) -> u8 {
+        self.shape.iter().map(|s| (*s > 1) as u8).sum()
     }
 
     /// Size of this tensor along the dimension `i`.
@@ -354,6 +370,20 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         }
     }
 
+    fn vector_dim(&self) -> usize {
+        let dim = match self.ordering {
+            MatrixOrdering::RowMajor => 1,
+            MatrixOrdering::ColumnMajor => 0,
+        };
+        let mut required_shape = [1; 4];
+        required_shape[dim] = self.shape[dim];
+        assert_eq!(
+            required_shape, self.shape,
+            "Operation only supported on vector tensors."
+        );
+        dim
+    }
+
     // /// Reads the buffer’s content into a vector.
     // pub async fn read_bytes<'a>(&'a self, device: &'a Device) -> anyhow::Result<BufferView<'a>> {
     //     // TODO: could probably be optimized?
@@ -486,7 +516,8 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
     /// its underlying `GpuTensor`.
     ///
     /// If it matches, returns the tensor's matrix ordering.
-    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering> {
+    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
+    where T: Pod {
         if self.buffer.len() == self.len() as usize && self.offset == 0 {
             self.is_contiguous()
         } else {
@@ -699,7 +730,8 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
     /// its underlying `GpuTensor`.
     ///
     /// If it matches, returns the tensor's matrix ordering.
-    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering> {
+    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
+    where T: Pod {
         self.as_ref().is_entire_tensor()
     }
 
@@ -942,7 +974,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn vector_uninit(
+    pub fn vector_uninit(
         backend: &B,
         len: u32,
         usage: BufferUsages,
@@ -950,7 +982,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     where
         T: DeviceValue + Pod,
     {
-        unsafe { TensorBuilder::vector(len, usage).build_uninit(backend) }
+        TensorBuilder::vector(len, usage).build_uninit(backend)
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
@@ -972,7 +1004,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn vector_uninit_encased(
+    pub fn vector_uninit_encased(
         backend: &B,
         len: u32,
         usage: BufferUsages,
@@ -980,7 +1012,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     where
         T: DeviceValue + EncaseType,
     {
-        unsafe { TensorBuilder::vector(len, usage).build_uninit_encased(backend) }
+        TensorBuilder::vector(len, usage).build_uninit_encased(backend)
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
@@ -1017,11 +1049,11 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn scalar_uninit_encased(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
+    pub fn scalar_uninit_encased(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
     where
         T: DeviceValue + EncaseType,
     {
-        unsafe { TensorBuilder::scalar(usage).build_uninit_encased(backend) }
+        TensorBuilder::scalar(usage).build_uninit_encased(backend)
     }
 
     /// Allocates a new gpu storage buffer with a single element initialized to `value`.
@@ -1053,4 +1085,149 @@ impl<'b, B: Backend, T: DeviceValue> ShaderArgs<'b, B> for GpuTensor<T, B> {
     {
         self.buffer.write_arg(binding, name, dispatch)
     }
+}
+
+
+macro_rules! append_and_remove(
+    ($append: ident, $shift_remove: ident, $TraitBound: ident, $capacity: ident, $copy_buffer_to_buffer: ident, $uninit_buffer: ident, $write_buffer: ident) => {
+        /// Append the `data` elements at the end of this tensor if it is a vector.
+        ///
+        /// Panics if the tensor isn’t a vector. The tensor is a vector if:
+        /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
+        ///  `*` is any non-zero positive integer).
+        /// - It is a column-major tensor and its size is made of a single column. Its size is
+        ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
+        ///
+        /// If the underlying GPU buffer is too small to contain the extra elements, it is automatically
+        /// resized. If a resize happens, the tensor’s capacity is the next power of two sufficient
+        /// to contain the appended data.
+        // TODO: broadcast automatically to generalize to any tensor order.
+        pub fn $append(&mut self, backend: &B, data: &[T]) -> Result<(), B::Error>
+        where
+            T: $TraitBound,
+        {
+            let dim_to_grow = self.vector_dim();
+            let num_added = data.len();
+            let curr_len = self.shape[dim_to_grow];
+            let new_len = curr_len + num_added as u32;
+
+            let mut encoder = backend.begin_encoding();
+
+
+            if new_len as u64 >= self.$capacity() {
+                // We need to grow the buffer.
+                let new_capacity = new_len.next_power_of_two();
+                // SAFETY: will be initialized by the buffer init.
+                let mut new_buffer = backend.$uninit_buffer(
+                    new_capacity as usize,
+                    self.buffer().usage() | BufferUsages::COPY_DST
+                )?;
+
+                encoder.$copy_buffer_to_buffer(
+                    &self.buffer,
+                    0,
+                    &mut new_buffer,
+                    0,
+                    curr_len as usize,
+                )?;
+                self.buffer = new_buffer;
+            }
+
+            backend.$write_buffer(&mut self.buffer, curr_len as u64, data)?;
+            backend.submit(encoder)?;
+            self.shape[dim_to_grow] = new_len;
+            Ok(())
+        }
+
+        /// Removes a `range` of elements from this tensor if it is a vector, shifting back elements to
+        /// fill the gap.
+        ///
+        /// Panics if the tensor isn’t a vector. The tensor is a vector if:
+        /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
+        ///  `*` is any non-zero positive integer).
+        /// - It is a column-major tensor and its size is made of a single column. Its size is
+        ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
+        ///
+        /// This method doesn’t change the tensor’s capacity so the internal GPU buffer isn’t resized.
+        ///
+        /// # Performance note
+        ///
+        /// This method is currently fairly expensive as it always involves the creation of a staging
+        /// buffer for copying the data being moved. The staging buffer size is equal to the number of
+        /// moved elements.
+        ///
+        /// # Panic
+        ///
+        /// Panics if `self` wasn’t created with the `BufferUsages::COPY_SRC | BufferUsages::COPY_DST` flags.
+        /// Panics if the range is out of the bounds of `self`.
+        ///
+        /// # Return
+        ///
+        /// If the operation suceeded, returns the number of removed elements.
+        // TODO: add a special case for targets capable of copying slices within the same buffer.
+        // TODO: it would be worth benchmarking with doing the shift with a compute shader instead.
+        pub fn $shift_remove(
+            &mut self,
+            backend: &B,
+            range: impl RangeBounds<usize>,
+        ) -> Result<usize, B::Error>
+        where T: $TraitBound {
+            let dim_to_shrink = self.vector_dim();
+            let curr_len = self.shape[dim_to_shrink] as usize;
+            let range_start = match range.start_bound() {
+                Bound::Included(i) => *i,
+                Bound::Excluded(i) => *i + 1,
+                Bound::Unbounded => 0,
+            };
+            let range_end = match range.end_bound() {
+                Bound::Included(i) => *i + 1,
+                Bound::Excluded(i) => *i,
+                Bound::Unbounded => curr_len,
+            };
+
+            if range_end <= range_start {
+                // The range to remove is empty.
+                return Ok(0);
+            }
+
+            assert!(range_end <= curr_len, "Range index out of bounds.");
+            let num_elements_to_move = curr_len - range_end;
+
+            // NOTE: if `curr_end == range_end` we don’t actually need to move any data, shrinking
+            //       the shape is sufficient.
+            if num_elements_to_move > 0 {
+                // SAFETY: will be initialized with a buffer-to-buffer copy.
+                let mut staging = backend.$uninit_buffer(
+                    num_elements_to_move,
+                    BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+                )?;
+
+                let mut encoder = backend.begin_encoding();
+                encoder.$copy_buffer_to_buffer(
+                    &self.buffer,
+                    range_end,
+                    &mut staging,
+                    0,
+                    num_elements_to_move,
+                )?;
+                encoder.$copy_buffer_to_buffer(
+                    &staging,
+                    0,
+                    &mut self.buffer,
+                    range_start,
+                    num_elements_to_move,
+                )?;
+                backend.submit(encoder)?;
+            }
+
+            let num_removed = range_end - range_start;
+            self.shape[dim_to_shrink] -= num_removed as u32;
+            Ok(num_removed)
+        }
+    }
+);
+
+impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    append_and_remove!(append, shift_remove, Pod, capacity, copy_buffer_to_buffer, uninit_buffer, write_buffer);
+    append_and_remove!(append_encased, shift_remove_encased, EncaseType, capacity_encased, copy_buffer_to_buffer_encased, uninit_buffer_encased, write_buffer_encased);
 }

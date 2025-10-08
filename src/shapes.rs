@@ -268,7 +268,7 @@ impl<B: Backend> ViewShapeBuffers<B> {
 
         let mut recycled = self.recycled.lock().unwrap();
         let buffer = if let Some(mut buffer) = recycled.pop() {
-            backend.write_buffer(&mut buffer, &[shape])?;
+            backend.write_buffer(&mut buffer, 0, &[shape])?;
             buffer
         } else {
             // println!("Couldn’t find recycling for {:?}", shape);

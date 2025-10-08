@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{MatrixOrdering, ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Shader)]
@@ -58,13 +58,13 @@ impl<B: Backend> Contiguous<B> {
 
 #[cfg(test)]
 mod test {
+    use crate::shapes::ViewShapeBuffers;
+    use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DMatrix;
     use slang_hal::Shader;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
-    use crate::shapes::ViewShapeBuffers;
-    use crate::tensor::GpuTensor;
     use wgpu::{BufferUsages, Features, Limits};
 
     #[futures_test::test]

@@ -15,4 +15,3 @@ pub fn main() {
         slang.compile_all(target, "../shaders", "./src/autogen", &[]);
     }
 }
-
