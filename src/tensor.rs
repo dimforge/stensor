@@ -4,7 +4,7 @@
 // TODO: feels like this should be in stensor instead of slang-hal
 
 use crate::shapes::{GGML_IDS, MatrixOrdering, ViewShape};
-use bytemuck::Pod;
+use bytemuck::{NoUninit};
 use encase::ShaderType;
 use nalgebra::{Dim, IsContiguous, Matrix, Storage};
 use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
@@ -71,7 +71,7 @@ impl TensorBuilder {
     }
 
     /// Builds the uninitialized gpu tensor.
-    pub fn build_uninit<T: DeviceValue + Pod, B: Backend>(
+    pub fn build_uninit<T: DeviceValue + NoUninit, B: Backend>(
         self,
         backend: &B,
     ) -> Result<GpuTensor<T, B>, B::Error> {
@@ -127,7 +127,7 @@ impl TensorBuilder {
     // }
 
     /// Builds this tensor with an array of values given for its initial value.
-    pub fn build_init<T: DeviceValue + Pod, B: Backend>(
+    pub fn build_init<T: DeviceValue + NoUninit, B: Backend>(
         self,
         backend: &B,
         data: &[T],
@@ -212,10 +212,15 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         self.shape.into_iter().map(|s| s as u64).product()
     }
 
+    // /// The tensor’s rank.
+    // pub fn rank(&self) -> u64 {
+    //     self.shape.iter().filter(|i| **i != 1).count() as u64
+    // }
+
     /// The maximum number of elements this tensor can hold without needing a resize of the
     /// underlying GPU buffer.
     pub fn capacity(&self) -> u64
-    where T: Pod {
+    where T: NoUninit {
         self.buffer.len() as u64
     }
 
@@ -293,7 +298,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         source: impl Into<GpuTensorView<'a, T, B>>,
     ) -> Result<(), B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         let source = source.into();
         let copy_len = self.len();
@@ -517,7 +522,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
     ///
     /// If it matches, returns the tensor's matrix ordering.
     pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
-    where T: Pod {
+    where T: NoUninit {
         if self.buffer.len() == self.len() as usize && self.offset == 0 {
             self.is_contiguous()
         } else {
@@ -731,7 +736,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
     ///
     /// If it matches, returns the tensor's matrix ordering.
     pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
-    where T: Pod {
+    where T: NoUninit {
         self.as_ref().is_entire_tensor()
     }
 
@@ -902,13 +907,13 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     }
 }
 
-impl<T: DeviceValue + Pod, B: Backend> GpuTensor<T, B> {
+impl<T: DeviceValue + NoUninit, B: Backend> GpuTensor<T, B> {
     /// Allocates a new matrix on the gpu with uninitialized elements.
     ///
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn matrix_uninit(
+    pub fn matrix_uninit(
         backend: &B,
         nrows: u32,
         ncols: u32,
@@ -917,7 +922,7 @@ impl<T: DeviceValue + Pod, B: Backend> GpuTensor<T, B> {
     where
         T: DeviceValue,
     {
-        unsafe { TensorBuilder::matrix(nrows, ncols, usage).build_uninit(backend) }
+        TensorBuilder::matrix(nrows, ncols, usage).build_uninit(backend)
     }
 
     // pub fn uninit_encased(device: &Device, nrows: u32, ncols: u32, usage: BufferUsages) -> Self
@@ -980,21 +985,21 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         usage: BufferUsages,
     ) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         TensorBuilder::vector(len, usage).build_uninit(backend)
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
     ///
-    /// If `T` does not implement `Pod`, use [`GpuMatrix::encase`] instead.
+    /// If `T` does not implement `NoUninit`, use [`GpuMatrix::encase`] instead.
     pub fn vector(
         backend: &B,
         vector: impl AsRef<[T]>,
         usage: BufferUsages,
     ) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         let v = vector.as_ref();
         TensorBuilder::vector(v.len() as u32, usage).build_init(backend, v.as_ref())
@@ -1017,7 +1022,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
 
     /// Allocates a new vector on the gpu initialized from `vector`.
     ///
-    /// If `T` does not implement `Pod`, use [`GpuMatrix::encase`] instead.
+    /// If `T` does not implement `NoUninit`, use [`GpuMatrix::encase`] instead.
     pub fn vector_encased(
         backend: &B,
         vector: impl AsRef<[T]>,
@@ -1037,11 +1042,11 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn scalar_uninit(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
+    pub fn scalar_uninit(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
-        unsafe { TensorBuilder::scalar(usage).build_uninit(backend) }
+        TensorBuilder::scalar(usage).build_uninit(backend)
     }
 
     /// Allocates a new gpu storage buffer with a single uninitialized element.
@@ -1059,7 +1064,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// Allocates a new gpu storage buffer with a single element initialized to `value`.
     pub fn scalar(backend: &B, value: T, usage: BufferUsages) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         TensorBuilder::scalar(usage).build_init(backend, &[value])
     }
@@ -1228,6 +1233,6 @@ macro_rules! append_and_remove(
 );
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
-    append_and_remove!(append, shift_remove, Pod, capacity, copy_buffer_to_buffer, uninit_buffer, write_buffer);
+    append_and_remove!(append, shift_remove, NoUninit, capacity, copy_buffer_to_buffer, uninit_buffer, write_buffer);
     append_and_remove!(append_encased, shift_remove_encased, EncaseType, capacity_encased, copy_buffer_to_buffer_encased, uninit_buffer_encased, write_buffer_encased);
 }
