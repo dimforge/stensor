@@ -5,7 +5,7 @@ gpu". It aims (but it isn’t there yet) to expose linear algebra operations (in
 operations) as well as geometric types (quaternions, similarities, etc.) as Slang shaders and kernels.
 
 > **Warning**
-**stensor** is still very incomplete and under heavy development and is lacking many features.
+> **stensor** is still very incomplete and under heavy development and is lacking many features.
 
 See also the README of [slang-hal](https://github.com/dimforge/slang-hal/blob/main/README.md) for information on
 supported platforms.

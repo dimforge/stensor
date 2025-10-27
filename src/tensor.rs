@@ -59,6 +59,7 @@ impl TensorBuilder {
         self.shape.into_iter().map(|s| s as u64).product()
     }
 
+    /// Sets the matrix ordering for this tensor.
     pub fn ordering(mut self, ordering: MatrixOrdering) -> Self {
         self.ordering = ordering;
         self
@@ -148,6 +149,7 @@ impl TensorBuilder {
         })
     }
 
+    /// Builds this tensor with an array of encase-encoded values given for its initial value.
     pub fn build_encased<T: DeviceValue + EncaseType, B: Backend>(
         self,
         backend: &B,
@@ -170,8 +172,11 @@ impl TensorBuilder {
     }
 }
 
+/// Type alias for a vector stored on the GPU.
 pub type GpuVector<T, B> = GpuTensor<T, B>;
+/// Type alias for a matrix stored on the GPU.
 pub type GpuMatrix<T, B> = GpuTensor<T, B>;
+/// Type alias for a scalar stored on the GPU.
 pub type GpuScalar<T, B> = GpuTensor<T, B>;
 
 /// A tensor stored in the GPU.
@@ -183,20 +188,24 @@ pub struct GpuTensor<T: DeviceValue, B: Backend> {
     ordering: MatrixOrdering,
 }
 
+/// Type alias for a tensor stored on the WebGPU backend.
 pub type WgpuTensor<T> = GpuTensor<T, WebGpu>;
 #[cfg(feature = "cuda")]
 pub type CudaTensor<T> = GpuTensor<T, Cuda>;
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    /// Returns the matrix ordering of this tensor.
     pub fn ordering(&self) -> MatrixOrdering {
         self.ordering
     }
 
+    /// Returns a transposed version of this tensor.
     pub fn transposed(mut self) -> Self {
         self.transpose();
         self
     }
 
+    /// Transposes this tensor in place.
     pub fn transpose(&mut self) {
         self.shape.swap(0, 1);
         self.ordering = self.ordering.transpose();
@@ -575,10 +584,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view_shape.stride[GGML_IDS[i]]
     }
 
+    /// Returns a transposed view of this tensor.
     pub fn transposed(&self) -> Self {
         self.permute([1, 0, 2, 3])
     }
 
+    /// Permutes the dimensions of this view according to the given permutation array.
     pub fn permute(&self, permutations: [usize; 4]) -> Self {
         Self {
             view_shape: self.view_shape.permute(permutations),
@@ -587,6 +598,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Permutes the dimensions according to GGML's dimension ordering convention.
     pub fn permute_ggml(&self, permutations: [usize; 4]) -> Self {
         Self {
             view_shape: self.view_shape.permute_ggml(permutations),
@@ -595,7 +607,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
-    // Specify the ordering explicitly to avoid ambiguities if the original shape has 1 row and 1 col.
+    /// Reshapes this view with an explicit ordering to avoid ambiguities.
+    ///
+    /// This is useful when the original shape has 1 row and 1 column.
     pub fn reshape_with_ordering<const DIM2: usize>(
         &self,
         shape: [u32; DIM2],
@@ -608,10 +622,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view(0, shape4, view_shape.stride.map(Some))
     }
 
+    /// Reshapes this view to the specified shape, preserving the matrix ordering.
     pub fn reshape<const DIM2: usize>(&self, shape: [u32; DIM2]) -> Self {
         self.view(0, shape, [None; DIM2])
     }
 
+    /// Reshapes this view using GGML's dimension ordering convention.
     pub fn reshape_ggml<const DIM2: usize>(&self, mut shape: [u32; DIM2]) -> Self {
         shape.swap(0, 1);
 
@@ -623,7 +639,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
-    // Specify the ordering explicitly to avoid ambiguities if the original shape has 1 row and 1 col.
+    /// Reshapes this view using GGML's ordering with an explicit matrix ordering.
+    ///
+    /// This is useful to avoid ambiguities when the original shape has 1 row and 1 column.
     pub fn reshape_ggml_with_ordering<const DIM2: usize>(
         &self,
         mut shape: [u32; DIM2],
@@ -633,6 +651,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.reshape_with_ordering(shape, ordering)
     }
 
+    /// Creates a view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &self,
         mut offset: u32,
@@ -656,6 +675,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Creates a view using GGML's dimension ordering convention.
     pub fn view_ggml<const DIM2: usize>(
         &self,
         offset: u32,
@@ -667,6 +687,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view(offset, shape, stride)
     }
 
+    /// Returns a view of the `matrix_id`-th matrix in this tensor.
     pub fn matrix(&self, matrix_id: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(matrix_id < nmats);
@@ -681,6 +702,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view containing `new_ncols` columns starting from `first_col`.
     pub fn columns(&self, first_col: u32, new_ncols: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_col + new_ncols < ncols);
@@ -694,10 +716,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view of the specified column.
     pub fn column(&self, col: u32) -> Self {
         self.columns(col, 1)
     }
 
+    /// Returns a view containing `new_nrows` rows starting from `first_row`.
     pub fn rows(&self, first_row: u32, new_nrows: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_row + new_nrows < nrows);
@@ -711,12 +735,14 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view of the specified row.
     pub fn row(&self, row: u32) -> Self {
         self.rows(row, 1)
     }
 }
 
 impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
+    /// Converts this mutable view into an immutable view.
     pub fn as_ref(&self) -> GpuTensorView<'_, T, B> {
         GpuTensorView {
             view_shape: self.view_shape,
@@ -765,10 +791,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         self.view_shape.len()
     }
 
+    /// Returns a transposed mutable view of this tensor.
     pub fn transposed(&mut self) -> GpuTensorViewMut<'_, T, B> {
         self.permute([1, 0, 2, 3])
     }
 
+    /// Permutes the dimensions of this mutable view according to the given permutation array.
     pub fn permute(&mut self, permutations: [usize; 4]) -> GpuTensorViewMut<'_, T, B> {
         GpuTensorViewMut {
             view_shape: self.view_shape.permute(permutations),
@@ -777,10 +805,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Reshapes this mutable view to the specified shape.
     pub fn reshape<const DIM2: usize>(&mut self, shape: [u32; DIM2]) -> GpuTensorViewMut<'_, T, B> {
         self.view(0, shape, [None; DIM2])
     }
 
+    /// Creates a mutable view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &mut self,
         mut offset: u32,
@@ -804,6 +834,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the `matrix_id`-th matrix in this tensor.
     pub fn matrix(&mut self, matrix_id: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(matrix_id < nmats);
@@ -818,6 +849,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view containing `new_ncols` columns starting from `first_col`.
     pub fn columns(&mut self, first_col: u32, new_ncols: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_col + new_ncols < ncols);
@@ -831,10 +863,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the specified column.
     pub fn column(&mut self, col: u32) -> GpuTensorViewMut<'_, T, B> {
         self.columns(col, 1)
     }
 
+    /// Returns a mutable view containing `new_nrows` rows starting from `first_row`.
     pub fn rows(&mut self, first_row: u32, new_nrows: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_row + new_nrows < nrows);
@@ -848,29 +882,35 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the specified row.
     pub fn row(&mut self, row: u32) -> GpuTensorViewMut<'_, T, B> {
         self.rows(row, 1)
     }
 }
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    /// Reshapes this tensor to the specified shape.
     pub fn reshape<const DIM2: usize>(&self, shape: [u32; DIM2]) -> GpuTensorView<'_, T, B> {
         self.as_view().reshape_with_ordering(shape, self.ordering)
     }
 
+    /// Reshapes this tensor using GGML's dimension ordering convention.
     pub fn reshape_ggml<const DIM2: usize>(&self, shape: [u32; DIM2]) -> GpuTensorView<'_, T, B> {
         self.as_view()
             .reshape_ggml_with_ordering(shape, self.ordering)
     }
 
+    /// Permutes the dimensions of this tensor according to the given permutation array.
     pub fn permute(&self, permutations: [usize; 4]) -> GpuTensorView<'_, T, B> {
         self.as_view().permute(permutations)
     }
 
+    /// Permutes the dimensions according to GGML's dimension ordering convention.
     pub fn permute_ggml(&self, permutations: [usize; 4]) -> GpuTensorView<'_, T, B> {
         self.as_view().permute_ggml(permutations)
     }
 
+    /// Creates a view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &self,
         offset: u32,
@@ -880,6 +920,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         self.as_view().view(offset, shape, stride)
     }
 
+    /// Creates a view using GGML's dimension ordering convention.
     pub fn view_ggml<const DIM2: usize>(
         &self,
         offset: u32,
@@ -894,14 +935,17 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         self.as_view().column(i)
     }
 
+    /// Returns a view containing `ncols` columns starting from `first_col`.
     pub fn columns(&self, first_col: u32, ncols: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().columns(first_col, ncols)
     }
 
+    /// Returns a view of the specified row.
     pub fn row(&self, i: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().row(i)
     }
 
+    /// Returns a view containing `nrows` rows starting from `first_row`.
     pub fn rows(&self, first_row: u32, nrows: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().rows(first_row, nrows)
     }
@@ -1099,7 +1143,7 @@ macro_rules! append_and_remove(
         ///
         /// Panics if the tensor isn’t a vector. The tensor is a vector if:
         /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
-        ///  `*` is any non-zero positive integer).
+        ///   `*` is any non-zero positive integer).
         /// - It is a column-major tensor and its size is made of a single column. Its size is
         ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
         ///
@@ -1149,7 +1193,7 @@ macro_rules! append_and_remove(
         ///
         /// Panics if the tensor isn’t a vector. The tensor is a vector if:
         /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
-        ///  `*` is any non-zero positive integer).
+        ///   `*` is any non-zero positive integer).
         /// - It is a column-major tensor and its size is made of a single column. Its size is
         ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
         ///

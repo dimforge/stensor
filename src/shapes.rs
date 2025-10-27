@@ -6,19 +6,25 @@ use std::collections::hash_map::Entry;
 use std::sync::Mutex;
 use wgpu::BufferUsages;
 
+/// GGML dimension index mapping: converts between GGML and stensor dimension ordering.
 pub const GGML_IDS: [usize; 4] = [1, 0, 2, 3];
+/// GGML dimension index mapping (u32 version).
 pub const GGML_IDS_U32: [u32; 4] = [1, 0, 2, 3];
 
+/// Specifies the memory layout of matrices.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Hash)]
 pub enum MatrixOrdering {
+    /// Column-major ordering: elements in the same column are contiguous in memory.
     #[default]
     ColumnMajor,
+    /// Row-major ordering: elements in the same row are contiguous in memory.
     RowMajor,
     // TODO: should we generalize this to a `MajorAxis(i)` where any
     //       dimension of the tensor can be interpreted as the main one?
 }
 
 impl MatrixOrdering {
+    /// Returns the transposed matrix ordering.
     pub fn transpose(self) -> Self {
         match self {
             Self::ColumnMajor => Self::RowMajor,
@@ -40,6 +46,7 @@ pub struct ViewShape {
 }
 
 impl ViewShape {
+    /// Creates a contiguous view shape with the given size and ordering.
     pub fn contiguous(size: [u32; 4], ordering: MatrixOrdering) -> Self {
         let stride = match ordering {
             MatrixOrdering::ColumnMajor => {
@@ -52,19 +59,23 @@ impl ViewShape {
         Self { size, stride }
     }
 
+    /// Returns a transposed view of this shape.
     pub fn transpose(&self) -> Self {
         self.permute([1, 0, 2, 3])
     }
 
+    /// Conditionally transposes the shape based on the `transpose` parameter.
     pub fn maybe_transpose(&self, transpose: bool) -> Self {
         if transpose { self.transpose() } else { *self }
     }
 
+    /// Permutes the dimensions according to GGML's dimension ordering convention.
     pub fn permute_ggml(&self, mut permutations: [usize; 4]) -> Self {
         permutations.swap(0, 1);
         self.permute(permutations.map(|i| GGML_IDS[i]))
     }
 
+    /// Permutes the dimensions according to the given permutation array.
     pub fn permute(&self, permutations: [usize; 4]) -> Self {
         // Check all the permutation indices are valid and without
         // duplicate.
@@ -138,9 +149,10 @@ impl ViewShape {
         }
     }
 
+    /// Checks if each dimension of this shape is a multiple of the corresponding dimension in `of`.
     pub fn is_multiple_of(&self, of: Self) -> bool {
         for k in 0..4 {
-            if self.size[k] % of.size[k] != 0 {
+            if !self.size[k].is_multiple_of(of.size[k]) {
                 return false;
             }
         }
@@ -148,6 +160,7 @@ impl ViewShape {
         true
     }
 
+    /// Creates a view with the specified shape and strides within this shape.
     pub fn view<const DIM2: usize>(&self, shape: [u32; DIM2], stride: [Option<u32>; DIM2]) -> Self {
         assert!(DIM2 <= 4);
 
@@ -225,10 +238,12 @@ impl ViewShape {
         }
     }
 
+    /// Checks if this shape contains zero elements.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns the total number of elements in this shape.
     pub fn len(&self) -> u64 {
         (self.size[0] * self.size[1] * self.size[2] * self.size[3]) as u64
     }
@@ -256,11 +271,13 @@ impl<B: Backend> ViewShapeBuffers<B> {
         }
     }
 
+    /// Clears temporary shape buffers and recycles them for reuse.
     pub fn clear_tmp(&mut self) {
         let mut recycled = self.recycled.lock().unwrap();
         recycled.extend(self.tmp_buffers.drain().map(|(_, buf)| buf));
     }
 
+    /// Stores a temporary shape buffer for the given shape, creating one if needed.
     pub fn put_tmp(&mut self, backend: &B, shape: ViewShape) -> Result<(), B::Error> {
         if self.contains(shape) {
             return Ok(());
@@ -293,10 +310,12 @@ impl<B: Backend> ViewShapeBuffers<B> {
         backend.init_buffer(&[shape], usage | BufferUsages::STORAGE)
     }
 
+    /// Checks if a buffer for the given shape exists (permanent or temporary).
     pub fn contains(&self, shape: ViewShape) -> bool {
         self.buffers.contains_key(&shape) || self.tmp_buffers.contains_key(&shape)
     }
 
+    /// Inserts or retrieves a mutable buffer for the given shape.
     pub fn insert(
         &mut self,
         backend: &B,
