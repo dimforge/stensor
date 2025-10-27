@@ -5,9 +5,9 @@ use nalgebra::DMatrix;
 use slang_hal::Shader;
 use slang_hal::backend::WebGpu;
 use slang_hal::backend::{Backend, Encoder};
-use slang_hal::shapes::ViewShapeBuffers;
-use slang_hal::tensor::{GpuTensor, TensorBuilder};
 use stensor::linalg::{Gemm, GemmVariant};
+use stensor::shapes::ViewShapeBuffers;
+use stensor::tensor::GpuTensor;
 use wgpu::{BufferUsages, Features, Limits};
 
 #[async_std::main]

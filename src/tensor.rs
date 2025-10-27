@@ -4,7 +4,7 @@
 // TODO: feels like this should be in stensor instead of slang-hal
 
 use crate::shapes::{GGML_IDS, MatrixOrdering, ViewShape};
-use bytemuck::{NoUninit};
+use bytemuck::NoUninit;
 use encase::ShaderType;
 use nalgebra::{Dim, IsContiguous, Matrix, Storage};
 use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
@@ -229,14 +229,18 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// The maximum number of elements this tensor can hold without needing a resize of the
     /// underlying GPU buffer.
     pub fn capacity(&self) -> u64
-    where T: NoUninit {
+    where
+        T: NoUninit,
+    {
         self.buffer.len() as u64
     }
 
     /// The maximum number of elements this tensor can hold without needing a resize of the
     /// underlying GPU buffer.
     pub fn capacity_encased(&self) -> u64
-    where T: EncaseType {
+    where
+        T: EncaseType,
+    {
         self.buffer.len_encased() as u64
     }
 
@@ -531,7 +535,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
     ///
     /// If it matches, returns the tensor's matrix ordering.
     pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
-    where T: NoUninit {
+    where
+        T: NoUninit,
+    {
         if self.buffer.len() == self.len() as usize && self.offset == 0 {
             self.is_contiguous()
         } else {
@@ -762,7 +768,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
     ///
     /// If it matches, returns the tensor's matrix ordering.
     pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
-    where T: NoUninit {
+    where
+        T: NoUninit,
+    {
         self.as_ref().is_entire_tensor()
     }
 
@@ -1023,11 +1031,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub fn vector_uninit(
-        backend: &B,
-        len: u32,
-        usage: BufferUsages,
-    ) -> Result<Self, B::Error>
+    pub fn vector_uninit(backend: &B, len: u32, usage: BufferUsages) -> Result<Self, B::Error>
     where
         T: DeviceValue + NoUninit,
     {
@@ -1135,7 +1139,6 @@ impl<'b, B: Backend, T: DeviceValue> ShaderArgs<'b, B> for GpuTensor<T, B> {
         self.buffer.write_arg(binding, name, dispatch)
     }
 }
-
 
 macro_rules! append_and_remove(
     ($append: ident, $shift_remove: ident, $TraitBound: ident, $capacity: ident, $copy_buffer_to_buffer: ident, $uninit_buffer: ident, $write_buffer: ident) => {
@@ -1277,6 +1280,22 @@ macro_rules! append_and_remove(
 );
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
-    append_and_remove!(append, shift_remove, NoUninit, capacity, copy_buffer_to_buffer, uninit_buffer, write_buffer);
-    append_and_remove!(append_encased, shift_remove_encased, EncaseType, capacity_encased, copy_buffer_to_buffer_encased, uninit_buffer_encased, write_buffer_encased);
+    append_and_remove!(
+        append,
+        shift_remove,
+        NoUninit,
+        capacity,
+        copy_buffer_to_buffer,
+        uninit_buffer,
+        write_buffer
+    );
+    append_and_remove!(
+        append_encased,
+        shift_remove_encased,
+        EncaseType,
+        capacity_encased,
+        copy_buffer_to_buffer_encased,
+        uninit_buffer_encased,
+        write_buffer_encased
+    );
 }
