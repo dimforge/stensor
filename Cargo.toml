@@ -3,7 +3,7 @@ name = "stensor"
 authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
 description = "Cross-platform GPU tensor library with Slang and Rust."
 repository = "https://github.com/dimforge/stensor"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -12,15 +12,15 @@ cuda = [ "cudarc", "slang-hal/cuda" ]
 cublas = [ "slang-hal/cublas" ]
 
 [dependencies]
-wgpu = "26"
+wgpu = "27"
 encase = "0.12"
 bytemuck = "1"
 nalgebra = { version = "0.34", features = ["encase"] }
 
 cudarc = {  version = "0.16", optional = true }
 
-minislang = "0.1"
-slang-hal = { version = "0.1", features = ["derive"] }
+minislang = "0.2"
+slang-hal = { version = "0.2", features = ["derive"] }
 include_dir = "0.7"
 
 [dev-dependencies]

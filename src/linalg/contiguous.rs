@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{MatrixOrdering, ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Shader)]
@@ -58,13 +58,13 @@ impl<B: Backend> Contiguous<B> {
 
 #[cfg(test)]
 mod test {
+    use crate::shapes::ViewShapeBuffers;
+    use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DMatrix;
     use slang_hal::Shader;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
-    use crate::shapes::ViewShapeBuffers;
-    use crate::tensor::GpuTensor;
     use wgpu::{BufferUsages, Features, Limits};
 
     #[futures_test::test]
@@ -85,7 +85,8 @@ mod test {
     }
 
     async fn gpu_contiguous_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
         let contiguous = super::Contiguous::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);
@@ -111,8 +112,8 @@ mod test {
                 &backend,
                 &mut shapes,
                 &mut pass,
-                gpu_tensor.as_view().transposed(),
                 &gpu_output,
+                gpu_tensor.as_view().transposed(),
             )
             .unwrap();
         drop(pass); // Ensure the pass is ended before the encoder is borrowed again.

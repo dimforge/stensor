@@ -53,14 +53,14 @@ pub struct Reduce<B: Backend> {
 #[cfg(test)]
 mod test {
     use super::ReduceVariant;
+    use crate::shapes::{ViewShape, ViewShapeBuffers};
+    use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DVector;
     use slang_hal::ShaderArgs;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
     use slang_hal::shader::Shader;
-    use crate::shapes::{ViewShape, ViewShapeBuffers};
-    use crate::tensor::GpuTensor;
     use wgpu::BufferUsages;
 
     #[derive(ShaderArgs)]
@@ -93,7 +93,8 @@ mod test {
             ReduceVariant::Prod,
             ReduceVariant::SqNorm,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
 
         let reduce = super::Reduce::from_backend(&backend, &compiler).unwrap();
 

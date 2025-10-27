@@ -3,19 +3,20 @@
 
 // TODO: feels like this should be in stensor instead of slang-hal
 
-use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
 use crate::shapes::{GGML_IDS, MatrixOrdering, ViewShape};
-use bytemuck::Pod;
+use bytemuck::NoUninit;
 use encase::ShaderType;
 use nalgebra::{Dim, IsContiguous, Matrix, Storage};
+use slang_hal::backend::{Backend, Buffer, DeviceValue, EncaseType, Encoder, ShaderBinding};
+use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use slang_hal::backend::WebGpu;
 use wgpu::BufferUsages;
 
-use slang_hal::ShaderArgs;
 #[cfg(feature = "cuda")]
 use crate::cuda::Cuda;
+use slang_hal::ShaderArgs;
 use slang_hal::shader::ShaderArgsError;
 
 /// Helper struct for creating gpu storage buffers (scalars, vectors, matrices, tensors).
@@ -58,6 +59,7 @@ impl TensorBuilder {
         self.shape.into_iter().map(|s| s as u64).product()
     }
 
+    /// Sets the matrix ordering for this tensor.
     pub fn ordering(mut self, ordering: MatrixOrdering) -> Self {
         self.ordering = ordering;
         self
@@ -69,16 +71,12 @@ impl TensorBuilder {
         self
     }
 
-    /// Builds the gpu tensor.
-    ///
-    /// # Safety
-    ///
-    /// The returned buffer must be initialized before being read from.
-    pub unsafe fn build_uninit<T: DeviceValue + Pod, B: Backend>(
+    /// Builds the uninitialized gpu tensor.
+    pub fn build_uninit<T: DeviceValue + NoUninit, B: Backend>(
         self,
         backend: &B,
     ) -> Result<GpuTensor<T, B>, B::Error> {
-        let buffer = unsafe { backend.uninit_buffer(self.len() as usize, self.usage)? };
+        let buffer = backend.uninit_buffer(self.len() as usize, self.usage)?;
         Ok(GpuTensor {
             shape: self.shape,
             buffer,
@@ -91,11 +89,11 @@ impl TensorBuilder {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn build_uninit_encased<T: DeviceValue + EncaseType, B: Backend>(
+    pub fn build_uninit_encased<T: DeviceValue + EncaseType, B: Backend>(
         self,
         backend: &B,
     ) -> Result<GpuTensor<T, B>, B::Error> {
-        let buffer = unsafe { backend.uninit_buffer_encased(self.len() as usize, self.usage)? };
+        let buffer = backend.uninit_buffer_encased(self.len() as usize, self.usage)?;
         Ok(GpuTensor {
             shape: self.shape,
             buffer,
@@ -130,7 +128,7 @@ impl TensorBuilder {
     // }
 
     /// Builds this tensor with an array of values given for its initial value.
-    pub fn build_init<T: DeviceValue + Pod, B: Backend>(
+    pub fn build_init<T: DeviceValue + NoUninit, B: Backend>(
         self,
         backend: &B,
         data: &[T],
@@ -151,6 +149,7 @@ impl TensorBuilder {
         })
     }
 
+    /// Builds this tensor with an array of encase-encoded values given for its initial value.
     pub fn build_encased<T: DeviceValue + EncaseType, B: Backend>(
         self,
         backend: &B,
@@ -173,8 +172,11 @@ impl TensorBuilder {
     }
 }
 
+/// Type alias for a vector stored on the GPU.
 pub type GpuVector<T, B> = GpuTensor<T, B>;
+/// Type alias for a matrix stored on the GPU.
 pub type GpuMatrix<T, B> = GpuTensor<T, B>;
+/// Type alias for a scalar stored on the GPU.
 pub type GpuScalar<T, B> = GpuTensor<T, B>;
 
 /// A tensor stored in the GPU.
@@ -186,20 +188,24 @@ pub struct GpuTensor<T: DeviceValue, B: Backend> {
     ordering: MatrixOrdering,
 }
 
+/// Type alias for a tensor stored on the WebGPU backend.
 pub type WgpuTensor<T> = GpuTensor<T, WebGpu>;
 #[cfg(feature = "cuda")]
 pub type CudaTensor<T> = GpuTensor<T, Cuda>;
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    /// Returns the matrix ordering of this tensor.
     pub fn ordering(&self) -> MatrixOrdering {
         self.ordering
     }
 
+    /// Returns a transposed version of this tensor.
     pub fn transposed(mut self) -> Self {
         self.transpose();
         self
     }
 
+    /// Transposes this tensor in place.
     pub fn transpose(&mut self) {
         self.shape.swap(0, 1);
         self.ordering = self.ordering.transpose();
@@ -213,6 +219,34 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// The number of elements in this tensor.
     pub fn len(&self) -> u64 {
         self.shape.into_iter().map(|s| s as u64).product()
+    }
+
+    // /// The tensor’s rank.
+    // pub fn rank(&self) -> u64 {
+    //     self.shape.iter().filter(|i| **i != 1).count() as u64
+    // }
+
+    /// The maximum number of elements this tensor can hold without needing a resize of the
+    /// underlying GPU buffer.
+    pub fn capacity(&self) -> u64
+    where
+        T: NoUninit,
+    {
+        self.buffer.len() as u64
+    }
+
+    /// The maximum number of elements this tensor can hold without needing a resize of the
+    /// underlying GPU buffer.
+    pub fn capacity_encased(&self) -> u64
+    where
+        T: EncaseType,
+    {
+        self.buffer.len_encased() as u64
+    }
+
+    /// The tensor’s order (i.e. the number of dimensions with a size > 1).
+    pub fn order(&self) -> u8 {
+        self.shape.iter().map(|s| (*s > 1) as u8).sum()
     }
 
     /// Size of this tensor along the dimension `i`.
@@ -277,7 +311,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         source: impl Into<GpuTensorView<'a, T, B>>,
     ) -> Result<(), B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         let source = source.into();
         let copy_len = self.len();
@@ -352,6 +386,20 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
             offset: 0,
             buffer: &mut self.buffer,
         }
+    }
+
+    fn vector_dim(&self) -> usize {
+        let dim = match self.ordering {
+            MatrixOrdering::RowMajor => 1,
+            MatrixOrdering::ColumnMajor => 0,
+        };
+        let mut required_shape = [1; 4];
+        required_shape[dim] = self.shape[dim];
+        assert_eq!(
+            required_shape, self.shape,
+            "Operation only supported on vector tensors."
+        );
+        dim
     }
 
     // /// Reads the buffer’s content into a vector.
@@ -486,7 +534,10 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
     /// its underlying `GpuTensor`.
     ///
     /// If it matches, returns the tensor's matrix ordering.
-    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering> {
+    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
+    where
+        T: NoUninit,
+    {
         if self.buffer.len() == self.len() as usize && self.offset == 0 {
             self.is_contiguous()
         } else {
@@ -539,10 +590,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view_shape.stride[GGML_IDS[i]]
     }
 
+    /// Returns a transposed view of this tensor.
     pub fn transposed(&self) -> Self {
         self.permute([1, 0, 2, 3])
     }
 
+    /// Permutes the dimensions of this view according to the given permutation array.
     pub fn permute(&self, permutations: [usize; 4]) -> Self {
         Self {
             view_shape: self.view_shape.permute(permutations),
@@ -551,6 +604,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Permutes the dimensions according to GGML's dimension ordering convention.
     pub fn permute_ggml(&self, permutations: [usize; 4]) -> Self {
         Self {
             view_shape: self.view_shape.permute_ggml(permutations),
@@ -559,7 +613,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
-    // Specify the ordering explicitly to avoid ambiguities if the original shape has 1 row and 1 col.
+    /// Reshapes this view with an explicit ordering to avoid ambiguities.
+    ///
+    /// This is useful when the original shape has 1 row and 1 column.
     pub fn reshape_with_ordering<const DIM2: usize>(
         &self,
         shape: [u32; DIM2],
@@ -572,10 +628,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view(0, shape4, view_shape.stride.map(Some))
     }
 
+    /// Reshapes this view to the specified shape, preserving the matrix ordering.
     pub fn reshape<const DIM2: usize>(&self, shape: [u32; DIM2]) -> Self {
         self.view(0, shape, [None; DIM2])
     }
 
+    /// Reshapes this view using GGML's dimension ordering convention.
     pub fn reshape_ggml<const DIM2: usize>(&self, mut shape: [u32; DIM2]) -> Self {
         shape.swap(0, 1);
 
@@ -587,7 +645,9 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
-    // Specify the ordering explicitly to avoid ambiguities if the original shape has 1 row and 1 col.
+    /// Reshapes this view using GGML's ordering with an explicit matrix ordering.
+    ///
+    /// This is useful to avoid ambiguities when the original shape has 1 row and 1 column.
     pub fn reshape_ggml_with_ordering<const DIM2: usize>(
         &self,
         mut shape: [u32; DIM2],
@@ -597,6 +657,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.reshape_with_ordering(shape, ordering)
     }
 
+    /// Creates a view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &self,
         mut offset: u32,
@@ -620,6 +681,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Creates a view using GGML's dimension ordering convention.
     pub fn view_ggml<const DIM2: usize>(
         &self,
         offset: u32,
@@ -631,6 +693,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         self.view(offset, shape, stride)
     }
 
+    /// Returns a view of the `matrix_id`-th matrix in this tensor.
     pub fn matrix(&self, matrix_id: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(matrix_id < nmats);
@@ -645,6 +708,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view containing `new_ncols` columns starting from `first_col`.
     pub fn columns(&self, first_col: u32, new_ncols: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_col + new_ncols < ncols);
@@ -658,10 +722,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view of the specified column.
     pub fn column(&self, col: u32) -> Self {
         self.columns(col, 1)
     }
 
+    /// Returns a view containing `new_nrows` rows starting from `first_row`.
     pub fn rows(&self, first_row: u32, new_nrows: u32) -> Self {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_row + new_nrows < nrows);
@@ -675,12 +741,14 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorView<'a, T, B> {
         }
     }
 
+    /// Returns a view of the specified row.
     pub fn row(&self, row: u32) -> Self {
         self.rows(row, 1)
     }
 }
 
 impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
+    /// Converts this mutable view into an immutable view.
     pub fn as_ref(&self) -> GpuTensorView<'_, T, B> {
         GpuTensorView {
             view_shape: self.view_shape,
@@ -699,7 +767,10 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
     /// its underlying `GpuTensor`.
     ///
     /// If it matches, returns the tensor's matrix ordering.
-    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering> {
+    pub fn is_entire_tensor(&self) -> Option<MatrixOrdering>
+    where
+        T: NoUninit,
+    {
         self.as_ref().is_entire_tensor()
     }
 
@@ -728,10 +799,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         self.view_shape.len()
     }
 
+    /// Returns a transposed mutable view of this tensor.
     pub fn transposed(&mut self) -> GpuTensorViewMut<'_, T, B> {
         self.permute([1, 0, 2, 3])
     }
 
+    /// Permutes the dimensions of this mutable view according to the given permutation array.
     pub fn permute(&mut self, permutations: [usize; 4]) -> GpuTensorViewMut<'_, T, B> {
         GpuTensorViewMut {
             view_shape: self.view_shape.permute(permutations),
@@ -740,10 +813,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Reshapes this mutable view to the specified shape.
     pub fn reshape<const DIM2: usize>(&mut self, shape: [u32; DIM2]) -> GpuTensorViewMut<'_, T, B> {
         self.view(0, shape, [None; DIM2])
     }
 
+    /// Creates a mutable view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &mut self,
         mut offset: u32,
@@ -767,6 +842,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the `matrix_id`-th matrix in this tensor.
     pub fn matrix(&mut self, matrix_id: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(matrix_id < nmats);
@@ -781,6 +857,7 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view containing `new_ncols` columns starting from `first_col`.
     pub fn columns(&mut self, first_col: u32, new_ncols: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_col + new_ncols < ncols);
@@ -794,10 +871,12 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the specified column.
     pub fn column(&mut self, col: u32) -> GpuTensorViewMut<'_, T, B> {
         self.columns(col, 1)
     }
 
+    /// Returns a mutable view containing `new_nrows` rows starting from `first_row`.
     pub fn rows(&mut self, first_row: u32, new_nrows: u32) -> GpuTensorViewMut<'_, T, B> {
         let [nrows, ncols, nmats, ncubes] = self.view_shape.size;
         assert!(first_row + new_nrows < nrows);
@@ -811,29 +890,35 @@ impl<'a, T: DeviceValue, B: Backend> GpuTensorViewMut<'a, T, B> {
         }
     }
 
+    /// Returns a mutable view of the specified row.
     pub fn row(&mut self, row: u32) -> GpuTensorViewMut<'_, T, B> {
         self.rows(row, 1)
     }
 }
 
 impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    /// Reshapes this tensor to the specified shape.
     pub fn reshape<const DIM2: usize>(&self, shape: [u32; DIM2]) -> GpuTensorView<'_, T, B> {
         self.as_view().reshape_with_ordering(shape, self.ordering)
     }
 
+    /// Reshapes this tensor using GGML's dimension ordering convention.
     pub fn reshape_ggml<const DIM2: usize>(&self, shape: [u32; DIM2]) -> GpuTensorView<'_, T, B> {
         self.as_view()
             .reshape_ggml_with_ordering(shape, self.ordering)
     }
 
+    /// Permutes the dimensions of this tensor according to the given permutation array.
     pub fn permute(&self, permutations: [usize; 4]) -> GpuTensorView<'_, T, B> {
         self.as_view().permute(permutations)
     }
 
+    /// Permutes the dimensions according to GGML's dimension ordering convention.
     pub fn permute_ggml(&self, permutations: [usize; 4]) -> GpuTensorView<'_, T, B> {
         self.as_view().permute_ggml(permutations)
     }
 
+    /// Creates a view of a sub-tensor with the specified offset, shape, and optional strides.
     pub fn view<const DIM2: usize>(
         &self,
         offset: u32,
@@ -843,6 +928,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         self.as_view().view(offset, shape, stride)
     }
 
+    /// Creates a view using GGML's dimension ordering convention.
     pub fn view_ggml<const DIM2: usize>(
         &self,
         offset: u32,
@@ -857,26 +943,29 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
         self.as_view().column(i)
     }
 
+    /// Returns a view containing `ncols` columns starting from `first_col`.
     pub fn columns(&self, first_col: u32, ncols: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().columns(first_col, ncols)
     }
 
+    /// Returns a view of the specified row.
     pub fn row(&self, i: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().row(i)
     }
 
+    /// Returns a view containing `nrows` rows starting from `first_row`.
     pub fn rows(&self, first_row: u32, nrows: u32) -> GpuTensorView<'_, T, B> {
         self.as_view().rows(first_row, nrows)
     }
 }
 
-impl<T: DeviceValue + Pod, B: Backend> GpuTensor<T, B> {
+impl<T: DeviceValue + NoUninit, B: Backend> GpuTensor<T, B> {
     /// Allocates a new matrix on the gpu with uninitialized elements.
     ///
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn matrix_uninit(
+    pub fn matrix_uninit(
         backend: &B,
         nrows: u32,
         ncols: u32,
@@ -885,7 +974,7 @@ impl<T: DeviceValue + Pod, B: Backend> GpuTensor<T, B> {
     where
         T: DeviceValue,
     {
-        unsafe { TensorBuilder::matrix(nrows, ncols, usage).build_uninit(backend) }
+        TensorBuilder::matrix(nrows, ncols, usage).build_uninit(backend)
     }
 
     // pub fn uninit_encased(device: &Device, nrows: u32, ncols: u32, usage: BufferUsages) -> Self
@@ -942,27 +1031,23 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn vector_uninit(
-        backend: &B,
-        len: u32,
-        usage: BufferUsages,
-    ) -> Result<Self, B::Error>
+    pub fn vector_uninit(backend: &B, len: u32, usage: BufferUsages) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
-        unsafe { TensorBuilder::vector(len, usage).build_uninit(backend) }
+        TensorBuilder::vector(len, usage).build_uninit(backend)
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
     ///
-    /// If `T` does not implement `Pod`, use [`GpuMatrix::encase`] instead.
+    /// If `T` does not implement `NoUninit`, use [`GpuTensor::vector_encased`] instead.
     pub fn vector(
         backend: &B,
         vector: impl AsRef<[T]>,
         usage: BufferUsages,
     ) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         let v = vector.as_ref();
         TensorBuilder::vector(v.len() as u32, usage).build_init(backend, v.as_ref())
@@ -972,7 +1057,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn vector_uninit_encased(
+    pub fn vector_uninit_encased(
         backend: &B,
         len: u32,
         usage: BufferUsages,
@@ -980,12 +1065,10 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     where
         T: DeviceValue + EncaseType,
     {
-        unsafe { TensorBuilder::vector(len, usage).build_uninit_encased(backend) }
+        TensorBuilder::vector(len, usage).build_uninit_encased(backend)
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
-    ///
-    /// If `T` does not implement `Pod`, use [`GpuMatrix::encase`] instead.
     pub fn vector_encased(
         backend: &B,
         vector: impl AsRef<[T]>,
@@ -1005,11 +1088,11 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn scalar_uninit(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
+    pub fn scalar_uninit(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
-        unsafe { TensorBuilder::scalar(usage).build_uninit(backend) }
+        TensorBuilder::scalar(usage).build_uninit(backend)
     }
 
     /// Allocates a new gpu storage buffer with a single uninitialized element.
@@ -1017,17 +1100,17 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     /// # Safety
     ///
     /// The returned buffer must be initialized before being read from.
-    pub unsafe fn scalar_uninit_encased(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
+    pub fn scalar_uninit_encased(backend: &B, usage: BufferUsages) -> Result<Self, B::Error>
     where
         T: DeviceValue + EncaseType,
     {
-        unsafe { TensorBuilder::scalar(usage).build_uninit_encased(backend) }
+        TensorBuilder::scalar(usage).build_uninit_encased(backend)
     }
 
     /// Allocates a new gpu storage buffer with a single element initialized to `value`.
     pub fn scalar(backend: &B, value: T, usage: BufferUsages) -> Result<Self, B::Error>
     where
-        T: DeviceValue + Pod,
+        T: DeviceValue + NoUninit,
     {
         TensorBuilder::scalar(usage).build_init(backend, &[value])
     }
@@ -1053,4 +1136,164 @@ impl<'b, B: Backend, T: DeviceValue> ShaderArgs<'b, B> for GpuTensor<T, B> {
     {
         self.buffer.write_arg(binding, name, dispatch)
     }
+}
+
+macro_rules! append_and_remove(
+    ($append: ident, $shift_remove: ident, $TraitBound: ident, $capacity: ident, $copy_buffer_to_buffer: ident, $uninit_buffer: ident, $write_buffer: ident) => {
+        /// Append the `data` elements at the end of this tensor if it is a vector.
+        ///
+        /// Panics if the tensor isn’t a vector. The tensor is a vector if:
+        /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
+        ///   `*` is any non-zero positive integer).
+        /// - It is a column-major tensor and its size is made of a single column. Its size is
+        ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
+        ///
+        /// If the underlying GPU buffer is too small to contain the extra elements, it is automatically
+        /// resized. If a resize happens, the tensor’s capacity is the next power of two sufficient
+        /// to contain the appended data.
+        // TODO: broadcast automatically to generalize to any tensor order.
+        pub fn $append(&mut self, backend: &B, data: &[T]) -> Result<(), B::Error>
+        where
+            T: $TraitBound,
+        {
+            let dim_to_grow = self.vector_dim();
+            let num_added = data.len();
+            let curr_len = self.shape[dim_to_grow];
+            let new_len = curr_len + num_added as u32;
+
+            let mut encoder = backend.begin_encoding();
+
+
+            if new_len as u64 >= self.$capacity() {
+                // We need to grow the buffer.
+                let new_capacity = new_len.next_power_of_two();
+                // SAFETY: will be initialized by the buffer init.
+                let mut new_buffer = backend.$uninit_buffer(
+                    new_capacity as usize,
+                    self.buffer().usage() | BufferUsages::COPY_DST
+                )?;
+
+                encoder.$copy_buffer_to_buffer(
+                    &self.buffer,
+                    0,
+                    &mut new_buffer,
+                    0,
+                    curr_len as usize,
+                )?;
+                self.buffer = new_buffer;
+            }
+
+            backend.$write_buffer(&mut self.buffer, curr_len as u64, data)?;
+            backend.submit(encoder)?;
+            self.shape[dim_to_grow] = new_len;
+            Ok(())
+        }
+
+        /// Removes a `range` of elements from this tensor if it is a vector, shifting back elements to
+        /// fill the gap.
+        ///
+        /// Panics if the tensor isn’t a vector. The tensor is a vector if:
+        /// - It is a row-major tensor and is made of a single row. Its size is `[1, *, 1, 1]` (where
+        ///   `*` is any non-zero positive integer).
+        /// - It is a column-major tensor and its size is made of a single column. Its size is
+        ///   `[*, 1, 1, 1]` (where `*` is any non-zero positive integer).
+        ///
+        /// This method doesn’t change the tensor’s capacity so the internal GPU buffer isn’t resized.
+        ///
+        /// # Performance note
+        ///
+        /// This method is currently fairly expensive as it always involves the creation of a staging
+        /// buffer for copying the data being moved. The staging buffer size is equal to the number of
+        /// moved elements.
+        ///
+        /// # Panic
+        ///
+        /// Panics if `self` wasn’t created with the `BufferUsages::COPY_SRC | BufferUsages::COPY_DST` flags.
+        /// Panics if the range is out of the bounds of `self`.
+        ///
+        /// # Return
+        ///
+        /// If the operation suceeded, returns the number of removed elements.
+        // TODO: add a special case for targets capable of copying slices within the same buffer.
+        // TODO: it would be worth benchmarking with doing the shift with a compute shader instead.
+        pub fn $shift_remove(
+            &mut self,
+            backend: &B,
+            range: impl RangeBounds<usize>,
+        ) -> Result<usize, B::Error>
+        where T: $TraitBound {
+            let dim_to_shrink = self.vector_dim();
+            let curr_len = self.shape[dim_to_shrink] as usize;
+            let range_start = match range.start_bound() {
+                Bound::Included(i) => *i,
+                Bound::Excluded(i) => *i + 1,
+                Bound::Unbounded => 0,
+            };
+            let range_end = match range.end_bound() {
+                Bound::Included(i) => *i + 1,
+                Bound::Excluded(i) => *i,
+                Bound::Unbounded => curr_len,
+            };
+
+            if range_end <= range_start {
+                // The range to remove is empty.
+                return Ok(0);
+            }
+
+            assert!(range_end <= curr_len, "Range index out of bounds.");
+            let num_elements_to_move = curr_len - range_end;
+
+            // NOTE: if `curr_end == range_end` we don’t actually need to move any data, shrinking
+            //       the shape is sufficient.
+            if num_elements_to_move > 0 {
+                // SAFETY: will be initialized with a buffer-to-buffer copy.
+                let mut staging = backend.$uninit_buffer(
+                    num_elements_to_move,
+                    BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+                )?;
+
+                let mut encoder = backend.begin_encoding();
+                encoder.$copy_buffer_to_buffer(
+                    &self.buffer,
+                    range_end,
+                    &mut staging,
+                    0,
+                    num_elements_to_move,
+                )?;
+                encoder.$copy_buffer_to_buffer(
+                    &staging,
+                    0,
+                    &mut self.buffer,
+                    range_start,
+                    num_elements_to_move,
+                )?;
+                backend.submit(encoder)?;
+            }
+
+            let num_removed = range_end - range_start;
+            self.shape[dim_to_shrink] -= num_removed as u32;
+            Ok(num_removed)
+        }
+    }
+);
+
+impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
+    append_and_remove!(
+        append,
+        shift_remove,
+        NoUninit,
+        capacity,
+        copy_buffer_to_buffer,
+        uninit_buffer,
+        write_buffer
+    );
+    append_and_remove!(
+        append_encased,
+        shift_remove_encased,
+        EncaseType,
+        capacity_encased,
+        copy_buffer_to_buffer_encased,
+        uninit_buffer_encased,
+        write_buffer_encased
+    );
 }

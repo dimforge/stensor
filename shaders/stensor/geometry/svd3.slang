@@ -49,8 +49,10 @@ public struct Svd3 {
 
 // Constants used for calculation of givens quaternions
 static const float GAMMA = 5.828427124; // sqrt(8)+3;
-static const float CSTAR = 0.923879532; // cos(pi/8)
-static const float SSTAR = 0.3826834323; // sin(p/8)
+static const float CSTAR = 1.0; // TODO: using no-identity values (below) breaks the SVD for near-identity matrices.
+static const float SSTAR = 0.0; // TODO: using no-identity values (below) breaks the SVD for near-identity matrices.
+//static const float CSTAR = 0.923879532; // cos(pi/8)
+//static const float SSTAR = 0.3826834323; // sin(p/8)
 // Threshold value
 static const float SVD_EPSILON = 1e-6;
 // Iteration counts for Jacobi Eigenanalysis and reciprocal square root functions, influence precision

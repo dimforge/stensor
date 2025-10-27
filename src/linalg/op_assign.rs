@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -155,13 +155,13 @@ impl<B: Backend> OpAssign<B> {
 #[cfg(test)]
 mod test {
     use super::{BinOpArgs, OpAssignVariant};
+    use crate::shapes::ViewShapeBuffers;
+    use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DVector;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Buffer, Encoder};
     use slang_hal::shader::Shader;
-    use crate::shapes::ViewShapeBuffers;
-    use crate::tensor::GpuTensor;
     use wgpu::BufferUsages;
 
     #[futures_test::test]
@@ -187,7 +187,8 @@ mod test {
             OpAssignVariant::Div,
             OpAssignVariant::Copy,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
 
         let op_assign = super::OpAssign::from_backend(&backend, &compiler).unwrap();
 

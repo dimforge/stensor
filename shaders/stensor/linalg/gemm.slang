@@ -26,8 +26,6 @@ void gemm_fast(
 ) {
     let local_id = local_id.y;
 
-    out[0] = 1.0;
-
     for (var k = 0u; k < shape_m2.ncols; k += 4u) {
         var sum = float4x4(0.0);
 

@@ -1,7 +1,7 @@
-use slang_hal::backend::Backend;
-use slang_hal::function::GpuFunction;
 use crate::shapes::{MatrixOrdering, ViewShape, ViewShapeBuffers};
 use crate::tensor::GpuTensorView;
+use slang_hal::backend::Backend;
+use slang_hal::function::GpuFunction;
 use slang_hal::{Shader, ShaderArgs};
 
 /// Indicates if a matrix needs to be considered as-is or as its transpose when running a matrix
@@ -308,14 +308,14 @@ impl<B: Backend> Gemv<B> {
 #[cfg(test)]
 mod test {
     use crate::GemvVariant;
+    use crate::shapes::ViewShapeBuffers;
+    use crate::tensor::GpuTensor;
     use approx::assert_relative_eq;
     use minislang::SlangCompiler;
     use nalgebra::{DMatrix, DVector};
     use slang_hal::Shader;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
-    use crate::shapes::ViewShapeBuffers;
-    use crate::tensor::GpuTensor;
     use wgpu::{BufferUsages, Features, Limits};
 
     #[futures_test::test]
@@ -349,7 +349,8 @@ mod test {
     }
 
     async fn gpu_gemv_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
         let gemv = super::Gemv::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);

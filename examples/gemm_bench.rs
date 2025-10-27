@@ -1,13 +1,12 @@
-use approx::assert_relative_eq;
 use indexmap::IndexMap;
 use minislang::SlangCompiler;
 use nalgebra::DMatrix;
 use slang_hal::Shader;
 use slang_hal::backend::WebGpu;
 use slang_hal::backend::{Backend, Encoder};
-use slang_hal::shapes::ViewShapeBuffers;
-use slang_hal::tensor::{GpuTensor, TensorBuilder};
 use stensor::linalg::{Gemm, GemmVariant};
+use stensor::shapes::ViewShapeBuffers;
+use stensor::tensor::GpuTensor;
 use wgpu::{BufferUsages, Features, Limits};
 
 #[async_std::main]
@@ -105,7 +104,7 @@ async fn run_gemm<B: Backend>(
         drop(pass); // Ensure the pass is ended before the encoder is borrowed again.
 
         backend.submit(encoder)?;
-        backend.synchronize();
+        backend.synchronize()?;
         timing[i] = t0.elapsed().as_secs_f32();
         backend
             .slow_read_buffer(result.buffer(), gpu_result.as_mut_slice())
