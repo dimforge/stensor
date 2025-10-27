@@ -12,7 +12,7 @@ cuda = [ "cudarc", "slang-hal/cuda" ]
 cublas = [ "slang-hal/cublas" ]
 
 [dependencies]
-wgpu = "26"
+wgpu = "27"
 encase = "0.12"
 bytemuck = "1"
 nalgebra = { version = "0.34", features = ["encase"] }
