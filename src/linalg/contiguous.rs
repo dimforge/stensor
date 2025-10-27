@@ -112,8 +112,8 @@ mod test {
                 &backend,
                 &mut shapes,
                 &mut pass,
-                gpu_tensor.as_view().transposed(),
                 &gpu_output,
+                gpu_tensor.as_view().transposed(),
             )
             .unwrap();
         drop(pass); // Ensure the pass is ended before the encoder is borrowed again.
