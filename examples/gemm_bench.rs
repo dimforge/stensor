@@ -1,4 +1,3 @@
-use approx::assert_relative_eq;
 use indexmap::IndexMap;
 use minislang::SlangCompiler;
 use nalgebra::DMatrix;
@@ -105,7 +104,7 @@ async fn run_gemm<B: Backend>(
         drop(pass); // Ensure the pass is ended before the encoder is borrowed again.
 
         backend.submit(encoder)?;
-        backend.synchronize();
+        backend.synchronize()?;
         timing[i] = t0.elapsed().as_secs_f32();
         backend
             .slow_read_buffer(result.buffer(), gpu_result.as_mut_slice())

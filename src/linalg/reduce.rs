@@ -93,7 +93,8 @@ mod test {
             ReduceVariant::Prod,
             ReduceVariant::SqNorm,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
 
         let reduce = super::Reduce::from_backend(&backend, &compiler).unwrap();
 

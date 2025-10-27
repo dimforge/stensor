@@ -237,7 +237,8 @@ mod test {
     }
 
     async fn gpu_gemm_generic(backend: impl Backend) {
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
         let gemm = super::Gemm::from_backend(&backend, &compiler).unwrap();
 
         let mut shapes = ViewShapeBuffers::new(&backend);

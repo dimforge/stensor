@@ -187,7 +187,8 @@ mod test {
             OpAssignVariant::Div,
             OpAssignVariant::Copy,
         ];
-        let compiler = SlangCompiler::new(vec!["../../crates/stensor/shaders".into()]);
+        let mut compiler = SlangCompiler::new(vec![]);
+        crate::register_shaders(&mut compiler);
 
         let op_assign = super::OpAssign::from_backend(&backend, &compiler).unwrap();
 

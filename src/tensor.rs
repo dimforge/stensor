@@ -1040,7 +1040,7 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
 
     /// Allocates a new vector on the gpu initialized from `vector`.
     ///
-    /// If `T` does not implement `NoUninit`, use [`GpuMatrix::encase`] instead.
+    /// If `T` does not implement `NoUninit`, use [`GpuTensor::vector_encased`] instead.
     pub fn vector(
         backend: &B,
         vector: impl AsRef<[T]>,
@@ -1069,8 +1069,6 @@ impl<T: DeviceValue, B: Backend> GpuTensor<T, B> {
     }
 
     /// Allocates a new vector on the gpu initialized from `vector`.
-    ///
-    /// If `T` does not implement `NoUninit`, use [`GpuMatrix::encase`] instead.
     pub fn vector_encased(
         backend: &B,
         vector: impl AsRef<[T]>,
