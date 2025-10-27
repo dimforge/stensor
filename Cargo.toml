@@ -19,8 +19,8 @@ nalgebra = { version = "0.34", features = ["encase"] }
 
 cudarc = {  version = "0.16", optional = true }
 
-minislang = "0.1"
-slang-hal = { version = "0.1", features = ["derive"] }
+minislang = "0.2"
+slang-hal = { version = "0.2", features = ["derive"] }
 include_dir = "0.7"
 
 [dev-dependencies]
