@@ -313,10 +313,10 @@ mod test {
     use approx::assert_relative_eq;
     use minislang::SlangCompiler;
     use nalgebra::{DMatrix, DVector};
-    use slang_hal::Shader;
+    use slang_hal::{BufferUsages, Shader};
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
-    use wgpu::{BufferUsages, Features, Limits};
+    use wgpu::{Features, Limits};
 
     #[futures_test::test]
     #[serial_test::serial]

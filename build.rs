@@ -1,17 +1,28 @@
-use minislang::{SlangCompiler, shader_slang::CompileTarget};
-use std::path::PathBuf;
-use std::str::FromStr;
+use {
+    minislang::{shader_slang::CompileTarget, SlangCompiler},
+    std::env,
+    std::path::{Path, PathBuf},
+    std::str::FromStr,
+};
 
+#[cfg(not(feature = "comptime"))]
+pub fn main() { }
+
+#[cfg(feature = "comptime")]
 pub fn main() {
-    let slang = SlangCompiler::new(vec![PathBuf::from_str("./shaders").unwrap()]);
+    use slang_hal_build::ShaderCompiler;
 
-    let targets = [
-        CompileTarget::Wgsl,
-        #[cfg(feature = "cuda")]
-        CompileTarget::CudaSource,
-    ];
+    const SLANG_SRC_DIR: include_dir::Dir<'_> =
+        include_dir::include_dir!("$CARGO_MANIFEST_DIR/shaders");
 
-    for target in targets {
-        slang.compile_all(target, "../shaders", "./src/autogen", &[]);
-    }
+    let out_dir = env::var("OUT_DIR").expect("Couldn't determine output directory.");
+    let mut compiler = ShaderCompiler::new(vec![], &out_dir);
+    compiler.add_dir(SLANG_SRC_DIR);
+
+    // Compile all shaders from examples/shaders directory.
+    // Note: slang-hal-build will automatically detect which backends to compile for
+    // based on the cargo features enabled during the build.
+    compiler
+        .compile_shaders_dir("shaders", &[])
+        .expect("Failed to compile shaders");
 }

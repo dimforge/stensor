@@ -8,18 +8,23 @@ edition = "2024"
 license = "Apache-2.0"
 
 [features]
+comptime = [ "slang-hal/comptime" ]
+runtime = [ "slang-hal/runtime" ]
+
+webgpu = [ "slang-hal/webgpu" ]
+vulkan = [ "slang-hal/vulkan" ]
+metal = [ "slang-hal/metal" ]
+cpu = [ "slang-hal/cpu" ]
 cuda = [ "cudarc", "slang-hal/cuda" ]
 cublas = [ "slang-hal/cublas" ]
 
 [dependencies]
-wgpu = "27"
 encase = "0.12"
 bytemuck = "1"
 nalgebra = { version = "0.34", features = ["encase"] }
 
 cudarc = {  version = "0.16", optional = true }
 
-minislang = "0.2"
 slang-hal = { version = "0.2", features = ["derive"] }
 include_dir = "0.7"
 
@@ -32,12 +37,16 @@ async-std = { version = "1", features = ["attributes"] }
 plotly = "0.12.1"
 indexmap = "2"
 anyhow = "1"
+wgpu = "27"
 
 [build-dependencies]
-minislang = "0.1"
+minislang = "0.2"
+slang-hal-build = "0.2"
+include_dir = "0.7"
 
 [patch.crates-io]
 #shader-slang = { path = "../slang-rs" }
-#minislang = { path = "../slang-hal/crates/minislang" }
-#slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
-#slang-hal = { path = "../slang-hal/crates/slang-hal" }
+minislang = { path = "../slang-hal/crates/minislang" }
+slang-hal-build = { path = "../slang-hal/crates/slang-hal-build" }
+slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
+slang-hal = { path = "../slang-hal/crates/slang-hal" }

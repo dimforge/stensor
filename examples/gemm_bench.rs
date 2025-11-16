@@ -1,13 +1,13 @@
 use indexmap::IndexMap;
 use minislang::SlangCompiler;
 use nalgebra::DMatrix;
-use slang_hal::Shader;
+use slang_hal::{BufferUsages, Shader};
 use slang_hal::backend::WebGpu;
 use slang_hal::backend::{Backend, Encoder};
 use stensor::linalg::{Gemm, GemmVariant};
 use stensor::shapes::ViewShapeBuffers;
 use stensor::tensor::GpuTensor;
-use wgpu::{BufferUsages, Features, Limits};
+use wgpu::{Features, Limits};
 
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {

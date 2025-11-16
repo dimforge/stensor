@@ -62,10 +62,10 @@ mod test {
     use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DMatrix;
-    use slang_hal::Shader;
+    use slang_hal::{BufferUsages, Shader};
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
-    use wgpu::{BufferUsages, Features, Limits};
+    use wgpu::{Features, Limits};
 
     #[futures_test::test]
     #[serial_test::serial]

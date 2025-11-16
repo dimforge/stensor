@@ -12,11 +12,10 @@ use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use slang_hal::backend::WebGpu;
-use wgpu::BufferUsages;
 
 #[cfg(feature = "cuda")]
 use crate::cuda::Cuda;
-use slang_hal::ShaderArgs;
+use slang_hal::{BufferUsages, ShaderArgs};
 use slang_hal::shader::ShaderArgsError;
 
 /// Helper struct for creating gpu storage buffers (scalars, vectors, matrices, tensors).
