@@ -202,9 +202,9 @@ mod test {
     use approx::relative_eq;
     use minislang::SlangCompiler;
     use nalgebra::DMatrix;
-    use slang_hal::Shader;
     use slang_hal::backend::{Backend, Encoder, WebGpu};
-    use wgpu::{BufferUsages, Features, Limits};
+    use slang_hal::{BufferUsages, Shader};
+    use wgpu::{Features, Limits};
 
     #[futures_test::test]
     #[serial_test::serial]

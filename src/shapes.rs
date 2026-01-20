@@ -1,10 +1,10 @@
 //! Tensor shape definition.
 
+use slang_hal::BufferUsages;
 use slang_hal::backend::Backend;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Mutex;
-use wgpu::BufferUsages;
 
 /// GGML dimension index mapping: converts between GGML and stensor dimension ordering.
 pub const GGML_IDS: [usize; 4] = [1, 0, 2, 3];

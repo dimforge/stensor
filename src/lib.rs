@@ -5,8 +5,7 @@
 
 pub use geometry::*;
 pub use linalg::*;
-
-use minislang::SlangCompiler;
+use slang_hal::SlangCompiler;
 
 pub mod geometry;
 pub mod linalg;
@@ -15,7 +14,8 @@ pub mod tensor;
 
 // pub mod utils;
 
-const SLANG_SRC_DIR: include_dir::Dir<'_> =
+/// Directory of slang shaders from `stensor`.
+pub const SLANG_SRC_DIR: include_dir::Dir<'_> =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/shaders");
 
 /// Register all the shaders from this crate (and its dependencies) as modules accessible to the
