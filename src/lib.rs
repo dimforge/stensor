@@ -3,9 +3,9 @@
 #![allow(clippy::result_large_err)]
 #![warn(missing_docs)]
 
-use slang_hal::SlangCompiler;
 pub use geometry::*;
 pub use linalg::*;
+use slang_hal::SlangCompiler;
 
 pub mod geometry;
 pub mod linalg;
@@ -14,6 +14,7 @@ pub mod tensor;
 
 // pub mod utils;
 
+/// Directory of slang shaders from `stensor`.
 pub const SLANG_SRC_DIR: include_dir::Dir<'_> =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/shaders");
 

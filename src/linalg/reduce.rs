@@ -57,10 +57,10 @@ mod test {
     use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DVector;
-    use slang_hal::{BufferUsages, ShaderArgs};
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Encoder};
     use slang_hal::shader::Shader;
+    use slang_hal::{BufferUsages, ShaderArgs};
 
     #[derive(ShaderArgs)]
     pub struct ReduceArgs<'a, B: Backend> {

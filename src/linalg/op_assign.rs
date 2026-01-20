@@ -159,9 +159,9 @@ mod test {
     use crate::tensor::GpuTensor;
     use minislang::SlangCompiler;
     use nalgebra::DVector;
+    use slang_hal::BufferUsages;
     use slang_hal::backend::WebGpu;
     use slang_hal::backend::{Backend, Buffer, Encoder};
-    use slang_hal::BufferUsages;
     use slang_hal::shader::Shader;
 
     #[futures_test::test]

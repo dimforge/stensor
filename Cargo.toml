@@ -3,7 +3,7 @@ name = "stensor"
 authors = ["Sébastien Crozet <sebcrozet@dimforge.com>"]
 description = "Cross-platform GPU tensor library with Slang and Rust."
 repository = "https://github.com/dimforge/stensor"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -25,10 +25,11 @@ nalgebra = { version = "0.34", features = ["encase"] }
 
 cudarc = {  version = "0.16", optional = true }
 
-slang-hal = { version = "0.2", features = ["derive"] }
+slang-hal = { version = "0.3", features = ["derive"] }
 include_dir = "0.7"
 
 [dev-dependencies]
+minislang = "0.3"
 nalgebra = { version = "0.34", features = ["rand"] }
 futures-test = "0.3"
 serial_test = "3"
@@ -40,13 +41,13 @@ anyhow = "1"
 wgpu = "27"
 
 [build-dependencies]
-minislang = "0.2"
-slang-hal-build = "0.2"
+minislang = "0.3"
+slang-hal-build = "0.3"
 include_dir = "0.7"
 
 [patch.crates-io]
 #shader-slang = { path = "../slang-rs" }
-minislang = { path = "../slang-hal/crates/minislang" }
-slang-hal-build = { path = "../slang-hal/crates/slang-hal-build" }
-slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
-slang-hal = { path = "../slang-hal/crates/slang-hal" }
+#minislang = { path = "../slang-hal/crates/minislang" }
+#slang-hal-build = { path = "../slang-hal/crates/slang-hal-build" }
+#slang-hal-derive = { path = "../slang-hal/crates/slang-hal-derive" }
+#slang-hal = { path = "../slang-hal/crates/slang-hal" }

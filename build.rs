@@ -1,12 +1,8 @@
-use {
-    minislang::{shader_slang::CompileTarget, SlangCompiler},
-    std::env,
-    std::path::{Path, PathBuf},
-    std::str::FromStr,
-};
+#[cfg(feature = "comptime")]
+use std::env;
 
 #[cfg(not(feature = "comptime"))]
-pub fn main() { }
+pub fn main() {}
 
 #[cfg(feature = "comptime")]
 pub fn main() {

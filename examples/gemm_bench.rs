@@ -1,9 +1,9 @@
 use indexmap::IndexMap;
 use minislang::SlangCompiler;
 use nalgebra::DMatrix;
-use slang_hal::{BufferUsages, Shader};
 use slang_hal::backend::WebGpu;
 use slang_hal::backend::{Backend, Encoder};
+use slang_hal::{BufferUsages, Shader};
 use stensor::linalg::{Gemm, GemmVariant};
 use stensor::shapes::ViewShapeBuffers;
 use stensor::tensor::GpuTensor;
