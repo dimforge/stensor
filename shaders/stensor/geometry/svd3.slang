@@ -1,12 +1,10 @@
-// This is a WGSL port of https://github.com/wi-re/tbtSVD/blob/master/source/SVD.h (MIT license)
-
-// which is an implementation of "Computing the Singular Value Decomposition of 3x3 matrices with minimal branching and
-// elementary floating point operations" from http://pages.cs.wisc.edu/~sifakis/project_pages/svd.html
+// Port of the glamx SVD3 implementation.
+// Uses eigendecomposition of A^T * A to compute singular values and right singular vectors,
+// then derives left singular vectors with Gram-Schmidt orthogonalization.
 
 module svd3;
 
-import stensor.geometry.quat;
-
+static const float SVD_EPSILON = 1e-10;
 
 // The SVD of a 3x3 matrix.
 public struct Svd3 {
@@ -21,22 +19,64 @@ public struct Svd3 {
     }
 
     // Computes the SVD of a 3x3 matrix.
+    // Returns M = U * S * V^T with singular values sorted in descending order.
     public __init(float3x3 A) {
-        let ata = mul(A, transpose(A));
-        let ata_sym = Symmetric3x3(
-            ata[0].x,
-            ata[0].y, ata[1].y,
-            ata[0].z, ata[1].z, ata[2].z
-        );
-        let V = jacobiEigenanalysis(ata_sym).to_matrix();
-        let B = mul(V, A);
-        let sorted = sortSingularValues(B, V);
-        let qr = QRDecomposition(sorted.B);
-        let S = float3(qr.R[0].x, qr.R[1].y, qr.R[2].z);
+        // Compute A^T * A (symmetric positive semi-definite).
+        // Note: mul(A, B) in slang computes A * B with row-vector convention,
+        // so mul(transpose(A), A) = A^T * A.
+        let ata = mul(transpose(A), A);
 
-        this.U = qr.Q;
-        this.S = S;
-        this.Vt = transpose(sorted.V);
+        // Eigendecomposition of A^T * A gives:
+        // - eigenvalues = singular values squared
+        // - eigenvectors = right singular vectors (columns of V)
+        let eigen = symmetricEigen3(ata);
+
+        // Eigenvalues come in ascending order, reverse to get descending.
+        let eigenvalues = float3(eigen.eigenvalues.z, eigen.eigenvalues.y, eigen.eigenvalues.x);
+        let V = float3x3(eigen.eigenvectors[2], eigen.eigenvectors[1], eigen.eigenvectors[0]);
+
+        // Singular values are square roots of eigenvalues.
+        let s = float3(
+            sqrt(max(eigenvalues.x, 0.0)),
+            sqrt(max(eigenvalues.y, 0.0)),
+            sqrt(max(eigenvalues.z, 0.0))
+        );
+
+        // Compute U = A * V * S^(-1) for each column, with Gram-Schmidt orthogonalization.
+        let v_col0 = V[0];
+        let v_col1 = V[1];
+        let v_col2 = V[2];
+
+        // Column 0
+        float3 u_col0;
+        if (s.x > SVD_EPSILON) {
+            u_col0 = mul(A, v_col0) / s.x;
+        } else {
+            u_col0 = v_col0;
+        }
+        u_col0 = normalize(u_col0);
+
+        // Column 1 (orthogonalize against u_col0)
+        float3 u_col1;
+        if (s.y > SVD_EPSILON) {
+            u_col1 = mul(A, v_col1) / s.y;
+        } else {
+            u_col1 = anyOrthogonal(u_col0);
+        }
+        u_col1 = normalize(u_col1 - u_col0 * dot(u_col1, u_col0));
+
+        // Column 2 (orthogonalize against u_col0 and u_col1)
+        float3 u_col2;
+        if (s.z > SVD_EPSILON) {
+            u_col2 = mul(A, v_col2) / s.z;
+        } else {
+            u_col2 = cross(u_col0, u_col1);
+        }
+        u_col2 = normalize(u_col2 - u_col0 * dot(u_col2, u_col0) - u_col1 * dot(u_col2, u_col1));
+
+        this.U = float3x3(u_col0, u_col1, u_col2);
+        this.S = s;
+        this.Vt = transpose(V);
     }
 
     // Rebuilds the matrix this svd is the decomposition of.
@@ -46,289 +86,195 @@ public struct Svd3 {
     }
 };
 
-
-// Constants used for calculation of givens quaternions
-static const float GAMMA = 5.828427124; // sqrt(8)+3;
-static const float CSTAR = 1.0; // TODO: using no-identity values (below) breaks the SVD for near-identity matrices.
-static const float SSTAR = 0.0; // TODO: using no-identity values (below) breaks the SVD for near-identity matrices.
-//static const float CSTAR = 0.923879532; // cos(pi/8)
-//static const float SSTAR = 0.3826834323; // sin(p/8)
-// Threshold value
-static const float SVD_EPSILON = 1e-6;
-// Iteration counts for Jacobi Eigenanalysis and reciprocal square root functions, influence precision
-static const uint JACOBI_STEPS = 12;
-static const uint RSQRT_STEPS = 4;
-static const uint RSQRT1_STEPS = 6;
-
-
-// The QR decomposition of a 3x3 matrix.
-struct QR {
-    float3x3 Q;
-    float3x3 R;
-};
-
-// A simple symmetrix 3x3 Matrix class (contains no storage for (0, 1) (0, 2) and (1, 2)
-struct Symmetric3x3 {
-    // TODO: for some reasons, naming these m00, m10, etc. doesn’t compile when
-    //       using svd3 as a module from another shader.
-    // NOTE: we should be able too switch back to m00, m10, etc. now that we don’t rely
-    //       on naga-oil.
-    float mxx;
-    float myx;
-    float myy;
-    float mzx;
-    float mzy;
-    float mzz;
-
-    __init(float mxx, float myx, float myy, float mzx, float mzy, float mzz) {
-        this.mxx = mxx;
-        this.myx = myx;
-        this.myy = myy;
-        this.mzx = mzx;
-        this.mzy = mzy;
-        this.mzz = mzz;
-    }
-}
-
-// Helper struct to store 2 floats to avoid OUT parameters on functions
-struct givens {
-    float ch;
-    float sh;
-};
-
-/// Calculates the reciprocal square root of x using a fast approximation.
-/// The number of newton iterations can be controlled using RSQRT_STEPS.
-// A built-in rsqrt function or 1.f/sqrt(x) could be used, however doing this manually allows for exact matching results on CPU and GPU code.
-func rsqrt(val: float) -> float {
-    var x = val;
-    let xhalf = -0.5f * x;
-    var i = bit_cast<int, float>(x);
-    i = 0x5f375a82 - (i >> 1);
-    x = bit_cast<float, int>(i);
-    for (var i = 0u; i < RSQRT_STEPS; i++) {
-        x = x * fma(x * x, xhalf, 1.5f);
-    }
-    return x;
-}
-
-// See rsqrt. Uses RSQRT1_STEPS to offer a higher precision alternative
-func rsqrt1(val: float) -> float {
-    var x = val;
-    let xhalf = -0.5f * x;
-    var i = bit_cast<int, float>(x);
-    i = 0x5f375a82 - (i >> 1);
-    x = bit_cast<float, int>(i);
-    for (var i = 0u; i < RSQRT1_STEPS; i++) {
-        x = x * fma(x * x, xhalf, 1.5f);
-    }
-    return x;
-}
-
-// Calculates the square root of x using 1.f/rsqrt1(x).
-func accurateSqrt(x: float) -> float {
-    return 1.f / rsqrt1(x);
-}
-
-// Helper function used to swap X with Y and Y with  X if c == true
-func condSwap(c: bool, inout x: float, inout y: float) {
-    let x0 = x;
-    x = select(c, y, x);
-    y = select(c, x0, y);
-}
-
-// Helper function used to swap X with Y and Y with -X if c == true
-func condNegSwap(c: bool, inout x: float, inout y: float) {
-    let x0 = -x;
-    x = select(c, y, x);
-    y = select(c, x0, y);
-}
-
-func condSwapVec(c: bool, inout x: float3, inout y: float3) {
-    let x0 = x;
-    x = select(bool3(c), y, x);
-    y = select(bool3(c), x0, y);
-}
-
-func condNegSwapVec(c: bool, inout x: float3, inout y: float3) {
-    let x0 = -x;
-    x = select(bool3(c), y, x);
-    y = select(bool3(c), x0, y);
-}
-
-// For an explanation of the math see http://pages.cs.wisc.edu/~sifakis/papers/SVD_TR1690.pdf
-// Computing the Singular Value Decomposition of 3 x 3 matrices with minimal branching and elementary floating point operations
-// See Algorithm 2 in reference. Given a matrix A this function returns the givens quaternion (x and w component, y and z are 0)
-func approximateGivensQuaternion(inout A: Symmetric3x3) -> givens {
-    let g = givens(2.f * (A.mxx - A.myy), A.myx);
-    var b = GAMMA * g.sh * g.sh < g.ch * g.ch;
-    let w = rsqrt(fma(g.ch, g.ch, g.sh * g.sh));
-    if (w != w) {
-        b = false;
-    }
-
-    if (b) {
-        return givens(w * g.ch, w * g.sh);
+// Find any unit vector orthogonal to the given vector.
+func anyOrthogonal(v: float3) -> float3 {
+    let abs_v = abs(v);
+    float3 other;
+    if (abs_v.x <= abs_v.y && abs_v.x <= abs_v.z) {
+        other = float3(1.0, 0.0, 0.0);
+    } else if (abs_v.y <= abs_v.z) {
+        other = float3(0.0, 1.0, 0.0);
     } else {
-        return givens(CSTAR, SSTAR);
+        other = float3(0.0, 0.0, 1.0);
+    }
+    return normalize(cross(v, other));
+}
+
+//
+// Symmetric 3x3 eigendecomposition.
+// Adapted from "A Robust Eigensolver for 3x3 Symmetric Matrices" by David Eberly.
+// https://www.geometrictools.com/Documentation/RobustEigenSymmetric3x3.pdf
+//
+
+struct SymmetricEigen3 {
+    // Eigenvalues in ascending order.
+    float3 eigenvalues;
+    // Eigenvectors as columns.
+    float3x3 eigenvectors;
+};
+
+func symmetricEigen3(mat: float3x3) -> SymmetricEigen3 {
+    let eigenvalues = eigenvalues3(mat);
+    let eigenvector1 = eigenvector1(mat, eigenvalues.x);
+    let eigenvector2 = eigenvector2(mat, eigenvector1, eigenvalues.y);
+    let eigenvector3 = cross(eigenvector1, eigenvector2);
+
+    SymmetricEigen3 result;
+    result.eigenvalues = eigenvalues;
+    result.eigenvectors = float3x3(eigenvector1, eigenvector2, eigenvector3);
+    return result;
+}
+
+// Computes eigenvalues of a symmetric 3x3 matrix in ascending order.
+// Reference: https://en.wikipedia.org/wiki/Eigenvalue_algorithm#3%C3%973_matrices
+func eigenvalues3(mat: float3x3) -> float3 {
+    let a00 = mat[0].x;
+    let a11 = mat[1].y;
+    let a22 = mat[2].z;
+    let a10 = mat[0].y;
+    let a20 = mat[0].z;
+    let a21 = mat[1].z;
+
+    let p1 = a10 * a10 + a20 * a20 + a21 * a21;
+
+    if (p1 == 0.0) {
+        // The matrix is diagonal. Sort eigenvalues ascending.
+        var e0 = a00;
+        var e1 = a11;
+        var e2 = a22;
+        // 3-element sorting network.
+        if (e0 > e1) { let t = e0; e0 = e1; e1 = t; }
+        if (e1 > e2) { let t = e1; e1 = e2; e2 = t; }
+        if (e0 > e1) { let t = e0; e0 = e1; e1 = t; }
+        return float3(e0, e1, e2);
+    }
+
+    let q = (a00 + a11 + a22) / 3.0;
+    let p2 = (a00 - q) * (a00 - q)
+           + (a11 - q) * (a11 - q)
+           + (a22 - q) * (a22 - q)
+           + 2.0 * p1;
+    let p = sqrt(p2 / 6.0);
+
+    let mat_b = mat - q * float3x3(
+        float3(1.0, 0.0, 0.0),
+        float3(0.0, 1.0, 0.0),
+        float3(0.0, 0.0, 1.0)
+    );
+
+    let r = (p != 0.0) ? determinant(mat_b) / (2.0 * p) : 3.402823e+38;
+
+    let pi = 3.14159265358979323846;
+    float phi;
+    if (r <= -1.0) {
+        phi = pi / 3.0;
+    } else if (r >= 1.0) {
+        phi = 0.0;
+    } else {
+        phi = acos(r) / 3.0;
+    }
+
+    // eigenvalues satisfy eigen3 <= eigen2 <= eigen1
+    let eigen1 = q + 2.0 * p * cos(phi);
+    let eigen3 = q + 2.0 * p * cos(phi + 2.0 * pi / 3.0);
+    let eigen2 = 3.0 * q - eigen1 - eigen3;
+    return float3(eigen3, eigen2, eigen1);
+}
+
+// Eigenvector for eigenvalue with multiplicity 1.
+func eigenvector1(mat: float3x3, eigenvalue: float) -> float3 {
+    let id = float3x3(
+        float3(1.0, 0.0, 0.0),
+        float3(0.0, 1.0, 0.0),
+        float3(0.0, 0.0, 1.0)
+    );
+    let cols = mat - float3x3(
+        id[0] * eigenvalue,
+        id[1] * eigenvalue,
+        id[2] * eigenvalue
+    );
+
+    let c0 = cols[0];
+    let c1 = cols[1];
+    let c2 = cols[2];
+
+    let c0xc1 = cross(c0, c1);
+    let c0xc2 = cross(c0, c2);
+    let c1xc2 = cross(c1, c2);
+
+    let d0 = dot(c0xc1, c0xc1);
+    let d1 = dot(c0xc2, c0xc2);
+    let d2 = dot(c1xc2, c1xc2);
+
+    var d_max = d0;
+    var i_max = 0;
+    if (d1 > d_max) { d_max = d1; i_max = 1; }
+    if (d2 > d_max) { d_max = d2; i_max = 2; }
+
+    // When all eigenvalues are equal, any unit vector is valid.
+    if (d_max < 1e-20) {
+        return float3(1.0, 0.0, 0.0);
+    }
+
+    if (i_max == 0) {
+        return c0xc1 / sqrt(d0);
+    } else if (i_max == 1) {
+        return c0xc2 / sqrt(d1);
+    } else {
+        return c1xc2 / sqrt(d2);
     }
 }
 
-// Function used to apply a givens rotation S. Calculates the weights and updates the quaternion to contain the cumultative rotation
-func jacobiConjugation(x: int, y: int, z: int, inout S: Symmetric3x3, inout q: Quat) {
-    var g = approximateGivensQuaternion(S);
-    let scale = 1.f / fma(g.ch, g.ch, g.sh *  g.sh);
-    let a = fma(g.ch, g.ch, -g.sh * g.sh) * scale;
-    let b = 2.f * g.sh * g.ch * scale;
-    var _S = S;
-    // perform conjugation S = Q'*S*Q
-    S.mxx = fma(a, fma(a, _S.mxx, b * _S.myx), b * (fma(a, _S.myx, b * _S.myy)));
-    S.myx = fma(a, fma(-b, _S.mxx, a * _S.myx), b * (fma(-b, _S.myx, a * _S.myy)));
-    S.myy = fma(-b, fma(-b, _S.mxx, a * _S.myx), a * (fma(-b, _S.myx, a * _S.myy)));
-    S.mzx = fma(a, _S.mzx, b * _S.mzy);
-    S.mzy = fma(-b, _S.mzx, a * _S.mzy);
-    S.mzz = _S.mzz;
-    // update cumulative rotation qV
-    var tmp: Array<float, 3> = { // TODO: why does it have to be `var` instead of `let` so we can index with z?
-        q.coords[0] * g.sh,
-        q.coords[1] * g.sh,
-        q.coords[2] * g.sh,
-    };
-    g.sh *= q.coords[3];
-    // (x,y,z) corresponds to ((0,1,2),(1,2,0),(2,0,1)) for (p,q) = ((0,1),(1,2),(0,2))
-    q.coords[z] = fma(q.coords[z], g.ch, g.sh);
-    q.coords[3] = fma(q.coords[3], g.ch, -tmp[z]); // w
-    q.coords[x] = fma(q.coords[x], g.ch, tmp[y]);
-    q.coords[y] = fma(q.coords[y], g.ch, -tmp[x]);
-    // re-arrange matrix for next iteration
-    _S.mxx = S.myy;
-    _S.myx = S.mzy; _S.myy = S.mzz;
-    _S.mzx = S.myx; _S.mzy = S.mzx; _S.mzz = S.mxx;
-    S.mxx = _S.mxx;
-    S.myx = _S.myx; S.myy = _S.myy;
-    S.mzx = _S.mzx; S.mzy = _S.mzy; S.mzz = _S.mzz;
-}
+// Eigenvector for eigenvalue with potential multiplicity 2.
+func eigenvector2(mat: float3x3, eigenvector1: float3, eigenvalue: float) -> float3 {
+    // Compute orthonormal pair (u, v) perpendicular to eigenvector1.
+    let sign = (eigenvector1.z >= 0.0) ? 1.0 : -1.0;
+    let a = -1.0 / (sign + eigenvector1.z);
+    let b = eigenvector1.x * eigenvector1.y * a;
+    let u = float3(1.0 + sign * eigenvector1.x * eigenvector1.x * a, sign * b, -sign * eigenvector1.x);
+    let v = float3(b, sign + eigenvector1.y * eigenvector1.y * a, -eigenvector1.y);
 
-// Function used to contain the givens permutations and the loop of the jacobi steps controlled by JACOBI_STEPS
-// Returns the quaternion q containing the cumulative result used to reconstruct S
-func jacobiEigenanalysis(S: Symmetric3x3) -> Quat {
-    var mat = S;
-    var q = Quat();
-    for (var i = 0u; i < JACOBI_STEPS; i += 1u) {
-        jacobiConjugation(0, 1, 2, mat, q);
-        jacobiConjugation(1, 2, 0, mat, q);
-        jacobiConjugation(2, 0, 1, mat, q);
+    let au = mul(mat, u);
+    let av = mul(mat, v);
+
+    var m00 = dot(u, au) - eigenvalue;
+    var m01 = dot(u, av);
+    var m11 = dot(v, av) - eigenvalue;
+
+    let abs_m00 = abs(m00);
+    let abs_m01 = abs(m01);
+    let abs_m11 = abs(m11);
+
+    if (abs_m00 >= abs_m11) {
+        let max_abs = max(abs_m00, abs_m01);
+        if (max_abs > 0.0) {
+            if (abs_m00 >= abs_m01) {
+                m01 /= m00;
+                m00 = 1.0 / sqrt(1.0 + m01 * m01);
+                m01 *= m00;
+            } else {
+                m00 /= m01;
+                m01 = 1.0 / sqrt(1.0 + m00 * m00);
+                m00 *= m01;
+            }
+            return m01 * u - m00 * v;
+        }
+    } else {
+        let max_abs = max(abs_m11, abs_m01);
+        if (max_abs > 0.0) {
+            if (abs_m11 >= abs_m01) {
+                m01 /= m11;
+                m11 = 1.0 / sqrt(1.0 + m01 * m01);
+                m01 *= m11;
+            } else {
+                m11 /= m01;
+                m01 = 1.0 / sqrt(1.0 + m11 * m11);
+                m11 *= m01;
+            }
+            return m11 * u - m01 * v;
+        }
     }
-    return q;
-}
 
-struct SortedSingularValues {
-    float3x3 B;
-    float3x3 V;
-}
-
-/// Implementation of Algorithm 3
-// NOTE: doing this through pointers to B and fails with an internal error in naga
-//       when trying to swap their columns.
-func sortSingularValues(B: float3x3, V: float3x3) -> SortedSingularValues {
-    var bx = B[0];
-    var by = B[1];
-    var bz = B[2];
-    var vx = V[0];
-    var vy = V[1];
-    var vz = V[2];
-    var rho1 = dot(bx, bx);
-    var rho2 = dot(by, by);
-    var rho3 = dot(bz, bz);
-
-    var c = rho1 < rho2;
-    condNegSwapVec(c, bx, by);
-    condNegSwapVec(c, vx, vy);
-    condSwap(c, rho1, rho2);
-    c = rho1 < rho3;
-    condNegSwapVec(c, bx, bz);
-    condNegSwapVec(c, vx, vz);
-    condSwap(c, rho1, rho3);
-    c = rho2 < rho3;
-    condNegSwapVec(c, by, bz);
-    condNegSwapVec(c, vy, vz);
-
-    return SortedSingularValues(float3x3(bx, by, bz), float3x3(vx, vy, vz));
-}
-
-// Implementation of Algorithm 4
-func QRGivensQuaternion(a1: float, a2: float) -> givens {
-    // a1 = pivot point on diagonal
-    // a2 = lower triangular entry we want to annihilate
-    let epsilon = SVD_EPSILON;
-    let rho = accurateSqrt(fma(a1, a1, a2 * a2));
-    var ch = abs(a1) + max(rho, epsilon);
-    var sh = select(rho > epsilon, a2, 0.0);
-    let b = a1 < 0.f;
-    condSwap(b, sh, ch);
-    let w = rsqrt(fma(ch, ch, sh * sh));
-    ch *= w;
-    sh *= w;
-    return givens(ch, sh);
-}
-
-// Implements a QR decomposition of a Matrix, see Sec 4.2
-func QRDecomposition(in_B: float3x3) -> QR {
-    var B = in_B;
-
-    // first givens rotation (ch,0,0,sh)
-    let g1 = QRGivensQuaternion(B[0].x, B[0].y);
-    var a = fma(-2.f, g1.sh * g1.sh, 1.f);
-    var b = 2.f * g1.ch * g1.sh;
-    // apply B = Q' * B
-    var r00 = fma(a, B[0].x, b * B[0].y);  var r01 = fma(a, B[1].x, b * B[1].y);	var r02 = fma(a, B[2].x, b * B[2].y);
-    var r10 = fma(-b, B[0].x, a * B[0].y); var r11 = fma(-b, B[1].x, a * B[1].y);	var r12 = fma(-b, B[2].x, a * B[2].y);
-    var r20 = B[0].z;					 var r21 = B[1].z;						var r22 = B[2].z;
-    // second givens rotation (ch,0,-sh,0)
-    let g2 = QRGivensQuaternion(r00, r20);
-    a = fma(-2.f, g2.sh * g2.sh, 1.f);
-    b = 2.f * g2.ch * g2.sh;
-    // apply B = Q' * B;
-    var b00 = fma(a, r00, b * r20);  var b01 = fma(a, r01, b * r21);  var b02 = fma(a, r02, b * r22);
-    var b10 = r10;                   var b11 = r11;                   var b12 = r12;
-    var b20 = fma(-b, r00, a * r20); var b21 = fma(-b, r01, a * r21); var b22 = fma(-b, r02, a * r22);
-    // third givens rotation (ch,sh,0,0)
-    let g3 = QRGivensQuaternion(b11, b21);
-    a = fma(-2.f, g3.sh * g3.sh, 1.f);
-    b = 2.f * g3.ch * g3.sh;
-    // R is now set to desired value
-    r00 = b00;                   r01 = b01;                  r02 = b02;
-    r10 = fma(a, b10, b * b20);  r11 = fma(a, b11, b * b21);  r12 = fma(a, b12, b * b22);
-    r20 = fma(-b, b10, a * b20); r21 = fma(-b, b11, a * b21); r22 = fma(-b, b12, a * b22);
-    // construct the cumulative rotation Q=Q1 * Q2 * Q3
-    // the number of floating point operations for three quaternion multiplications
-    // is more or less comparable to the explicit form of the joined matrix.
-    // certainly more memory-efficient!
-    let sh12 = 2.f * fma(g1.sh, g1.sh, -0.5f);
-    let sh22 = 2.f * fma(g2.sh, g2.sh, -0.5f);
-    let sh32 = 2.f * fma(g3.sh, g3.sh, -0.5f);
-
-    let q00 = sh12 * sh22;
-    let q01 = fma(4.f * g2.ch * g3.ch, sh12 * g2.sh * g3.sh, 2.f * g1.ch * g1.sh * sh32);
-    let q02 = fma(4.f * g1.ch * g3.ch, g1.sh * g3.sh, -2.f * g2.ch * sh12 * g2.sh * sh32);
-
-    let q10 = -2.f * g1.ch * g1.sh * sh22;
-    let q11 = fma(-8.f * g1.ch * g2.ch * g3.ch, g1.sh * g2.sh * g3.sh, sh12 * sh32);
-    let q12 = fma(-2.f * g3.ch, g3.sh, 4.f * g1.sh * fma(g3.ch * g1.sh, g3.sh, g1.ch * g2.ch*g2.sh*sh32));
-
-    let q20 = 2.f * g2.ch * g2.sh;
-    let q21 = -2.f * g3.ch * sh22 * g3.sh;
-    let q22 = sh22 * sh32;
-
-    let Q = float3x3(
-        float3(q00, q10, q20),
-        float3(q01, q11, q21),
-        float3(q02, q12, q22),
-    );
-    let R = float3x3(
-        float3(r00, r10, r20),
-        float3(r01, r11, r21),
-        float3(r02, r12, r22),
-    );
-
-    return QR(Q, R);
+    // M is the zero matrix, any unit-length solution suffices.
+    return u;
 }
