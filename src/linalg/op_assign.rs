@@ -224,7 +224,7 @@ mod test {
             let shape_a = shapes.get(gpu_v0.as_view().shape()).unwrap();
             let shape_b = shapes.get(gpu_v1.as_view().shape()).unwrap();
 
-            let mut pass = encoder.begin_pass();
+            let mut pass = encoder.begin_pass("test", None);
             let binop_args = BinOpArgs {
                 shape_a,
                 shape_b,

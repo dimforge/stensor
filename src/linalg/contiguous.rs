@@ -106,7 +106,7 @@ mod test {
         .unwrap();
 
         let mut encoder = backend.begin_encoding();
-        let mut pass = encoder.begin_pass();
+        let mut pass = encoder.begin_pass("test", None);
         contiguous
             .launch(
                 &backend,

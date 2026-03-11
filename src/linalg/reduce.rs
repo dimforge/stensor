@@ -126,7 +126,7 @@ mod test {
 
             let shape = shapes.get(gpu_v.as_view().shape()).unwrap();
 
-            let mut pass = encoder.begin_pass();
+            let mut pass = encoder.begin_pass("test", None);
             let binop_args = ReduceArgs {
                 shape,
                 input: gpu_v.buffer(),

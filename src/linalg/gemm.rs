@@ -269,7 +269,7 @@ mod test {
             println!("Checking variant: {:?}", variant);
             let t0 = std::time::Instant::now();
             let mut encoder = backend.begin_encoding();
-            let mut pass = encoder.begin_pass();
+            let mut pass = encoder.begin_pass("test", None);
             gemm.dispatch_generic(&backend, &mut shapes, &mut pass, &result, &m1, &m2, variant)
                 .unwrap();
             drop(pass); // Ensure the pass is ended before the encoder is borrowed again.
